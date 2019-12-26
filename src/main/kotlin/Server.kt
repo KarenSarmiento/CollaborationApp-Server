@@ -25,8 +25,6 @@ fun initialiseFirebaseSdk() {
 @Throws(FirebaseMessagingException::class)
 fun sendTestMessageToTopic() {
     println("Sending message to test topic!")
-    // The topic name can be optionally prefixed with "/topics/".
-
     // See documentation on defining a message payload.
     val message = Message.builder()
         .putData("fromUserId", "SERVER")
