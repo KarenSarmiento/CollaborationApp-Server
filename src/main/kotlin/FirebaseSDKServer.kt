@@ -13,7 +13,7 @@ fun main() {
 }
 
 fun initialiseFirebaseSdk() {
-    println("Initilaising Firebase Sdk...")
+    println("Initialising Firebase Sdk...")
     val options = FirebaseOptions.Builder()
         .setCredentials(GoogleCredentials.getApplicationDefault())
         .build()
