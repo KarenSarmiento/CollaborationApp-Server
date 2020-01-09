@@ -18,7 +18,7 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
 
     private var xmppConn: XMPPTCPConnection? = null
 
-    fun connectToFirebase(vararg params: Void?): Void? {
+    fun connectToFirebase() {
         // Allow connection to be resumed if it is ever lost.
         XMPPTCPConnection.setUseStreamManagementResumptionDefault(true)
         XMPPTCPConnection.setUseStreamManagementDefault(true)
@@ -75,7 +75,6 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
         // Login to Firebase server.
         val username = "${Utils.SENDER_ID}@${Utils.FCM_SERVER_AUTH_CONNECTION}"
         xmppConn?.login(username, Utils.SERVER_KEY)
-        return null
     }
 
     override fun processStanza(packet: Stanza) {
