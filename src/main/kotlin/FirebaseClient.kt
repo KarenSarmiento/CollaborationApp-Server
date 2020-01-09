@@ -11,6 +11,7 @@ import java.lang.Exception
 import org.jivesoftware.smack.StanzaListener
 import org.jivesoftware.smack.filter.StanzaTypeFilter
 import org.jivesoftware.smack.packet.Message
+import org.jivesoftware.smack.packet.StandardExtensionElement
 import org.jivesoftware.smack.sm.predicates.ForEveryStanza
 
 
@@ -79,7 +80,10 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
 
     override fun processStanza(packet: Stanza) {
         println("Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id}")
-        println("Received: ${packet.toXML(null)}")
+        val extendedPacket = packet.getExtension(Utils.FCM_NAMESPACE) as StandardExtensionElement
+        println("Received: ${extendedPacket.text}")
+        val firebasePacket = jsonStringToFirebasePacket(extendedPacket.text)
+        println(firebasePacket.toString())
     }
 
     /**
