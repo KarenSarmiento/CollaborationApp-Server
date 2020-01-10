@@ -1,3 +1,5 @@
+package xmpp
+
 import utils.Constants
 import org.jivesoftware.smack.packet.ExtensionElement
 import org.jivesoftware.smack.packet.Message

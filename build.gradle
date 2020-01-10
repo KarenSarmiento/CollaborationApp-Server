@@ -37,4 +37,4 @@ compileTestKotlin {
 }
 
 apply plugin: "application"
-mainClassName = 'SmackServerKt'
+mainClassName = 'EntryPointKt'

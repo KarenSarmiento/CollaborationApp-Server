@@ -1,3 +1,5 @@
+package xmpp
+
 import org.json.JSONObject
 
 fun jsonStringToFirebasePacket(json: String) : FirebasePacket {

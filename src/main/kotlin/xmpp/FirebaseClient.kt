@@ -1,3 +1,5 @@
+package xmpp
+
 import mu.KLogging
 import utils.Constants
 import org.jivesoftware.smack.*
@@ -16,6 +18,7 @@ import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.StandardExtensionElement
 import org.jivesoftware.smack.sm.predicates.ForEveryStanza
 import org.json.JSONObject
+import utils.packetDetails
 import utils.prettyFormatJSON
 import utils.prettyFormatXML
 import java.util.HashMap
@@ -88,7 +91,6 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
 
     override fun processStanza(packet: Stanza) {
         logger.info("\n---- Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id} ----")
-        printPacketDetails(packet)
 
         val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
         logger.info("extendedPacket.text: ${prettyFormatJSON(extendedPacket.text, 2)}")
@@ -101,16 +103,6 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
             else -> handleTestMessageReceipt(firebasePacket) // upstream
         }
         logger.info("---- End of packet processing ----\n")
-    }
-
-    private fun printPacketDetails(packet: Stanza) {
-        logger.info("packet.from: ${packet.from}")
-        logger.info("packet.to: ${packet.to}")
-        logger.info("packet.language: ${packet.language}")
-        logger.info("packet.extensions: ${packet.extensions}")
-        logger.info("packet.stanzaId: ${packet.stanzaId}")
-        logger.info("packet.error: ${packet.error}")
-        logger.info("packet.toXML(null): ${prettyFormatXML(packet.toXML(null).toString(), 2)}")
     }
 
     private fun handleTestMessageReceipt(packet: FirebasePacket) {

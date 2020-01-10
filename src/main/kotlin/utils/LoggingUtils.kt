@@ -1,5 +1,6 @@
 package utils
 
+import org.jivesoftware.smack.packet.Stanza
 import org.json.JSONObject
 import java.io.StringReader
 import java.io.StringWriter
@@ -26,4 +27,16 @@ fun prettyFormatXML(xmlString: String, indent: Int): String {
 
 fun prettyFormatJSON(jsonString: String, indent: Int): String {
     return JSONObject(jsonString).toString(indent)
+}
+
+fun packetDetails(packet: Stanza): String {
+    return """
+        packet.from: ${packet.from}
+        packet.to: ${packet.to}
+        packet.language: ${packet.language}
+        packet.extensions: ${packet.extensions}
+        packet.stanzaId: ${packet.stanzaId}
+        packet.error: ${packet.error}
+        packet.toXML(null): ${prettyFormatXML(packet.toXML(null).toString(), 2)}
+    """.trimIndent()
 }
