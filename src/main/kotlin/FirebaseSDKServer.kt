@@ -7,11 +7,6 @@ import com.google.firebase.messaging.Message
 
 private const val topic = "myTestTopic"
 
-fun main() {
-    initialiseFirebaseSdk()
-    sendTestMessageToTopic()
-}
-
 fun initialiseFirebaseSdk() {
     println("Initialising Firebase Sdk...")
     val options = FirebaseOptions.Builder()
