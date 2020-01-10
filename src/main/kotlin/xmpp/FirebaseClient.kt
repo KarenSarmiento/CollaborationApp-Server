@@ -18,16 +18,19 @@ import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.StandardExtensionElement
 import org.jivesoftware.smack.sm.predicates.ForEveryStanza
 import org.json.JSONObject
-import utils.packetDetails
 import utils.prettyFormatJSON
 import utils.prettyFormatXML
 import java.util.HashMap
 
 
-class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener {
+class FirebaseClient() : StanzaListener, ConnectionListener, ReconnectionListener {
 
     private companion object: KLogging()
     private var xmppConn: XMPPTCPConnection? = null
+
+    constructor(xmppConn: XMPPTCPConnection?): this() {
+        this.xmppConn = xmppConn
+    }
 
     fun connectToFirebase() {
         // Allow connection to be resumed if it is ever lost.
@@ -39,7 +42,7 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
         sslContext.init(null, null, SecureRandom())
 
         // Specify connection configurations.
-        logger.info {"Connecting to the FCM XMPP Server..."}
+        logger.info("Connecting to the FCM XMPP Server...")
         val config = XMPPTCPConnectionConfiguration.builder()
             .setXmppDomain(Constants.FCM_SERVER)
             .setHost(Constants.FCM_SERVER)
@@ -91,6 +94,8 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
 
     override fun processStanza(packet: Stanza) {
         logger.info("\n---- Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id} ----")
+        val xmlString = prettyFormatXML(packet.toXML(null).toString(), 2)
+        logger.info("Received: $xmlString")
 
         val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
         logger.info("extendedPacket.text: ${prettyFormatJSON(extendedPacket.text, 2)}")
@@ -100,12 +105,12 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
             "ack" -> logger.info("Warning: ACK receipt not yet supported.")
             "nack" -> logger.info("Warning: NACK receipt not yet supported.")
             "control" -> logger.info("Warning: Control message receipt not yet supported.")
-            else -> handleTestMessageReceipt(firebasePacket) // upstream
+            else -> handleUpstreamMessage(firebasePacket) // upstream
         }
         logger.info("---- End of packet processing ----\n")
     }
 
-    private fun handleTestMessageReceipt(packet: FirebasePacket) {
+    private fun handleUpstreamMessage(packet: FirebasePacket) {
         logger.info("This message is an upstream message.")
         sendAck(packet.from, packet.messageId)
     }
