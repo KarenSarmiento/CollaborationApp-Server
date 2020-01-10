@@ -1,3 +1,4 @@
+import utils.Constants
 import org.jivesoftware.smack.*
 import org.jivesoftware.smack.packet.Stanza
 import org.jivesoftware.smack.roster.Roster
@@ -14,6 +15,8 @@ import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.StandardExtensionElement
 import org.jivesoftware.smack.sm.predicates.ForEveryStanza
 import org.json.JSONObject
+import utils.prettyFormatJSON
+import utils.prettyFormatXML
 import java.util.HashMap
 
 
@@ -33,9 +36,9 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
         // Specify connection configurations.
         println("Connecting to the FCM XMPP Server...")
         val config = XMPPTCPConnectionConfiguration.builder()
-            .setXmppDomain(Utils.FCM_SERVER)
-            .setHost(Utils.FCM_SERVER)
-            .setPort(Utils.FCM_TEST_PORT)
+            .setXmppDomain(Constants.FCM_SERVER)
+            .setHost(Constants.FCM_SERVER)
+            .setPort(Constants.FCM_TEST_PORT)
             .setSendPresence(false)
             .setSecurityMode(ConnectionConfiguration.SecurityMode.ifpossible)
             .setCompressionEnabled(true)
@@ -64,7 +67,7 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
         // Log all outgoing packets
         xmppConn?.addStanzaInterceptor(
             StanzaListener { packet ->
-                val xmlString = Utils.prettyFormatXML(packet.toXML(null).toString(), 2)
+                val xmlString = prettyFormatXML(packet.toXML(null).toString(), 2)
                 println("Sent: $xmlString")
             },
             ForEveryStanza.INSTANCE
@@ -77,16 +80,16 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
         )
 
         // Login to Firebase server.
-        val username = "${Utils.SENDER_ID}@${Utils.FCM_SERVER_AUTH_CONNECTION}"
-        xmppConn?.login(username, Utils.SERVER_KEY)
+        val username = "${Constants.SENDER_ID}@${Constants.FCM_SERVER_AUTH_CONNECTION}"
+        xmppConn?.login(username, Constants.SERVER_KEY)
     }
 
     override fun processStanza(packet: Stanza) {
         println("\n---- Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id} ----")
         printPacketDetails(packet)
 
-        val extendedPacket = packet.getExtension(Utils.FCM_NAMESPACE) as StandardExtensionElement
-        println("extendedPacket.text: ${Utils.prettyFormatJSON(extendedPacket.text, 2)}")
+        val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
+        println("extendedPacket.text: ${prettyFormatJSON(extendedPacket.text, 2)}")
         val firebasePacket = jsonStringToFirebasePacket(extendedPacket.text)
 
         when(firebasePacket.messageType) {
@@ -105,7 +108,7 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
         println("packet.extensions: ${packet.extensions}")
         println("packet.stanzaId: ${packet.stanzaId}")
         println("packet.error: ${packet.error}")
-        println("packet.toXML(null): ${Utils.prettyFormatXML(packet.toXML(null).toString(), 2)}")
+        println("packet.toXML(null): ${prettyFormatXML(packet.toXML(null).toString(), 2)}")
     }
 
     private fun handleTestMessageReceipt(packet: FirebasePacket) {
