@@ -1,3 +1,4 @@
+import mu.KLogging
 import utils.Constants
 import org.jivesoftware.smack.*
 import org.jivesoftware.smack.packet.Stanza
@@ -22,6 +23,7 @@ import java.util.HashMap
 
 class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener {
 
+    private companion object: KLogging()
     private var xmppConn: XMPPTCPConnection? = null
 
     fun connectToFirebase() {
@@ -34,7 +36,7 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
         sslContext.init(null, null, SecureRandom())
 
         // Specify connection configurations.
-        println("Connecting to the FCM XMPP Server...")
+        logger.info {"Connecting to the FCM XMPP Server..."}
         val config = XMPPTCPConnectionConfiguration.builder()
             .setXmppDomain(Constants.FCM_SERVER)
             .setHost(Constants.FCM_SERVER)
@@ -68,7 +70,7 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
         xmppConn?.addStanzaInterceptor(
             StanzaListener { packet ->
                 val xmlString = prettyFormatXML(packet.toXML(null).toString(), 2)
-                println("Sent: $xmlString")
+                logger.info("Sent: $xmlString")
             },
             ForEveryStanza.INSTANCE
         )
@@ -85,34 +87,34 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
     }
 
     override fun processStanza(packet: Stanza) {
-        println("\n---- Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id} ----")
+        logger.info("\n---- Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id} ----")
         printPacketDetails(packet)
 
         val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
-        println("extendedPacket.text: ${prettyFormatJSON(extendedPacket.text, 2)}")
+        logger.info("extendedPacket.text: ${prettyFormatJSON(extendedPacket.text, 2)}")
         val firebasePacket = jsonStringToFirebasePacket(extendedPacket.text)
 
         when(firebasePacket.messageType) {
-            "ack" -> println("Warning: ACK receipt not yet supported.")
-            "nack" -> println("Warning: NACK receipt not yet supported.")
-            "control" -> println("Warning: Control message receipt not yet supported.")
+            "ack" -> logger.info("Warning: ACK receipt not yet supported.")
+            "nack" -> logger.info("Warning: NACK receipt not yet supported.")
+            "control" -> logger.info("Warning: Control message receipt not yet supported.")
             else -> handleTestMessageReceipt(firebasePacket) // upstream
         }
-        println("---- End of packet processing ----\n")
+        logger.info("---- End of packet processing ----\n")
     }
 
     private fun printPacketDetails(packet: Stanza) {
-        println("packet.from: ${packet.from}")
-        println("packet.to: ${packet.to}")
-        println("packet.language: ${packet.language}")
-        println("packet.extensions: ${packet.extensions}")
-        println("packet.stanzaId: ${packet.stanzaId}")
-        println("packet.error: ${packet.error}")
-        println("packet.toXML(null): ${prettyFormatXML(packet.toXML(null).toString(), 2)}")
+        logger.info("packet.from: ${packet.from}")
+        logger.info("packet.to: ${packet.to}")
+        logger.info("packet.language: ${packet.language}")
+        logger.info("packet.extensions: ${packet.extensions}")
+        logger.info("packet.stanzaId: ${packet.stanzaId}")
+        logger.info("packet.error: ${packet.error}")
+        logger.info("packet.toXML(null): ${prettyFormatXML(packet.toXML(null).toString(), 2)}")
     }
 
     private fun handleTestMessageReceipt(packet: FirebasePacket) {
-        println("This message is an upstream message.")
+        logger.info("This message is an upstream message.")
         sendAck(packet.from, packet.messageId)
     }
 
@@ -136,28 +138,28 @@ class FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener 
 
     // Connection Listener
     override fun connected(connection: XMPPConnection?) {
-        println("Connection established!")
+        logger.info("Connection established!")
     }
 
     override fun connectionClosed() {
-        println("Connection closed!")
+        logger.info("Connection closed!")
     }
 
     override fun connectionClosedOnError(e: Exception?) {
-        println("Connection closed with error: $e")
+        logger.info("Connection closed with error: $e")
     }
 
     override fun authenticated(connection: XMPPConnection?, resumed: Boolean) {
-        println("User authenticated.")
+        logger.info("User authenticated.")
     }
 
     // Reconnection Listener
     override fun reconnectionFailed(e: Exception) {
-        println("Reconnection failed! Error: ${e.message}")
+        logger.info("Reconnection failed! Error: ${e.message}")
     }
 
     override fun reconnectingIn(seconds: Int) {
-        println("Reconnecting in $seconds...")
+        logger.info("Reconnecting in $seconds...")
     }
 
 }
