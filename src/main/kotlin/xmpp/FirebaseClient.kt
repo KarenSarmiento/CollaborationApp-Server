@@ -1,5 +1,8 @@
 package xmpp
 
+import api.FirebasePacket
+import api.JsonKeyword
+import api.jsonStringToFirebasePacket
 import mu.KLogging
 import utils.Constants
 import org.jivesoftware.smack.*
@@ -102,10 +105,10 @@ class FirebaseClient() : StanzaListener, ConnectionListener, ReconnectionListene
         val firebasePacket = jsonStringToFirebasePacket(extendedPacket.text)
 
         when(firebasePacket.messageType) {
-            "ack" -> logger.info("Warning: ACK receipt not yet supported.")
-            "nack" -> logger.info("Warning: NACK receipt not yet supported.")
-            "control" -> logger.info("Warning: Control message receipt not yet supported.")
-            else -> handleUpstreamMessage(firebasePacket) // upstream
+            JsonKeyword.ACK.text -> logger.info("Warning: ACK receipt not yet supported.")
+            JsonKeyword.NACK.text -> logger.info("Warning: NACK receipt not yet supported.")
+            JsonKeyword.CONTROL.text -> logger.info("Warning: Control message receipt not yet supported.")
+            else -> handleUpstreamMessage(firebasePacket) // upstream has unspecified message type.
         }
         logger.info("---- End of packet processing ----\n")
     }
@@ -113,14 +116,21 @@ class FirebaseClient() : StanzaListener, ConnectionListener, ReconnectionListene
     private fun handleUpstreamMessage(packet: FirebasePacket) {
         logger.info("This message is an upstream message.")
         sendAck(packet.from, packet.messageId)
+
+        // An upstream packet must have a JSON in the data component.
+        val data = JSONObject(packet.data)
+        when(data.getString(JsonKeyword.UPSTREAM_TYPE.text)) {
+            JsonKeyword.NEW_PUBLIC_KEY.text -> api.handleNewPublicKeyRequest(data)
+            else -> logger.warn("Upstream message type ${data.getString(JsonKeyword.UPSTREAM_TYPE.text)} unsupported.")
+        }
     }
 
     private fun sendAck(from: String, messageId: String) {
         // Create ACK JSON
         val ackMap = HashMap<String?, Any?>()
-        ackMap["message_type"] = "ack"
-        ackMap["from"] = from
-        ackMap["message_id"] = messageId
+        ackMap[JsonKeyword.MESSAGE_TYPE.text] = JsonKeyword.ACK.text
+        ackMap[JsonKeyword.FROM.text] = from
+        ackMap[JsonKeyword.MESSAGE_ID.text] = messageId
         val jsonString = JSONObject(ackMap).toString()
         val ack = FcmPacketExtension(jsonString).toPacket()
 

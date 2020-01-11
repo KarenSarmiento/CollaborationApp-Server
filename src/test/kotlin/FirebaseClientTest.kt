@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 class FirebaseClientTest {
 
     @Test
-    fun `given an upstream packet, processStanza sends an ack with correct params`() {
+    fun `given an upstream packet, processStanza sends an ack with the correct params`() {
         // GIVEN
         // Mock xmpp connection and store calls to sendStanza.
         val xmppConnMock = mockk<XMPPTCPConnection>()
