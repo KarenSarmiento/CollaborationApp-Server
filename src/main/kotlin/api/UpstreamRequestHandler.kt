@@ -1,11 +1,12 @@
 package api
 
 import mu.KLogging
-import org.json.JSONObject
 import pki.PublicKeyManager
 import utils.FirebasePacket
+import utils.jsonStringToJson
 import xmpp.FirebaseClient
 import javax.json.Json
+import javax.json.JsonObject
 import utils.JsonKeyword as Jk
 
 /**
@@ -22,7 +23,7 @@ object UpstreamRequestHandler : KLogging() {
         fc.sendAck(packet.from, packet.messageId)
 
         // An upstream packet must have a JSON in the data component.
-        val data = JSONObject(packet.data)
+        val data = jsonStringToJson(packet.data)
         when(data.getString(Jk.UPSTREAM_TYPE.text)) {
             Jk.NEW_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, packet.from, packet.messageId)
             else -> logger.warn("Upstream message type ${data.getString(Jk.UPSTREAM_TYPE.text)} unsupported.")
@@ -42,7 +43,7 @@ object UpstreamRequestHandler : KLogging() {
      *  @param userId name of user requesting to register their public key.
      *  @param messageId messageId of request.
      */
-    private fun handleNewPublicKeyRequest(fc: FirebaseClient, pkm: PublicKeyManager, data: JSONObject, userId: String, messageId: String) {
+    private fun handleNewPublicKeyRequest(fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, messageId: String) {
         val userToken = data.getString(Jk.USER_TOKEN.text)
         val publicKey = data.getString(Jk.PUBLIC_KEY.text)
         val outcome = pkm.maybeAddPublicKey(userToken, publicKey)

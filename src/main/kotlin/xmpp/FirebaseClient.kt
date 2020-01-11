@@ -20,11 +20,10 @@ import org.jivesoftware.smack.filter.StanzaTypeFilter
 import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.StandardExtensionElement
 import org.jivesoftware.smack.sm.predicates.ForEveryStanza
-import org.json.JSONObject
 import pki.PublicKeyManager
 import utils.prettyFormatJSON
 import utils.prettyFormatXML
-import java.util.HashMap
+import javax.json.Json
 
 /**
  *  Handles XMPP-level connection between self and Firebase.
@@ -123,11 +122,11 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
     }
 
     private fun createAckJson(from: String, messageId: String): String {
-        val ackMap = HashMap<String?, Any?>()
-        ackMap[Jk.MESSAGE_TYPE.text] = Jk.ACK.text
-        ackMap[Jk.FROM.text] = from
-        ackMap[Jk.MESSAGE_ID.text] = messageId
-        return JSONObject(ackMap).toString()
+        return Json.createObjectBuilder()
+            .add(Jk.MESSAGE_TYPE.text, Jk.ACK.text)
+            .add(Jk.FROM.text, from)
+            .add(Jk.MESSAGE_ID.text, messageId)
+            .build().toString()
     }
 
     fun sendJson(json: String) {

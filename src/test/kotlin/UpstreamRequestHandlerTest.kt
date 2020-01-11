@@ -18,7 +18,7 @@ class UpstreamRequestHandlerTest {
         val firebasePacket = jsonStringToFirebasePacket("""
             {
                 "data": {
-                    "upstream_type": "test",
+                    "upstream_type": "test"
                 },
                 "time_to_live": 1,
                 "from": "$userFrom",

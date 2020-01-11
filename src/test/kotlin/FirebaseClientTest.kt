@@ -8,6 +8,7 @@ import xmpp.FirebaseClient
 import org.junit.jupiter.api.Assertions.assertTrue
 import pki.PublicKeyManager
 import utils.FirebasePacket
+import utils.prettyFormatJSON
 import utils.removeWhitespacesAndNewlines
 
 
@@ -27,7 +28,7 @@ class FirebaseClientTest {
                 <gcm xmlns="google:mobile:data" xmlns:stream="http://etherx.jabber.org/streams">
                     {
                         "data": $dataJson,
-                        "time_to_live": "$ttl",
+                        "time_to_live": $ttl,
                         "from": "$userFrom",
                         "message_id": "$messageId"
                     }
@@ -75,5 +76,13 @@ class FirebaseClientTest {
             </message>
         """).toRegex()
         assertTrue(expectedAckRegex matches actualAck)
+    }
+
+    @Test
+    fun `test`() {
+        print(
+        prettyFormatJSON("""
+            {"a":2,"b":{"c":3}}
+        """.trimIndent(),2))
     }
 }

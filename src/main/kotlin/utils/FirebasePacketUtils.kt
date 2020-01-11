@@ -1,6 +1,8 @@
 package utils
 
-import org.json.JSONObject
+import java.io.StringReader
+import javax.json.Json
+import javax.json.JsonObject
 
 enum class JsonKeyword(val text: String) {
     // All Packets
@@ -23,14 +25,16 @@ enum class JsonKeyword(val text: String) {
     SUCCESS("success")
 }
 
+fun jsonStringToJson(jsonString: String): JsonObject = Json.createReader(StringReader(jsonString)).readObject()
+
 fun jsonStringToFirebasePacket(json: String) : FirebasePacket {
-    val parsedJson = JSONObject(json)
+    val parsedJson = jsonStringToJson(json)
     return FirebasePacket(
-        parsedJson.optString(JsonKeyword.DATA.text),
-        parsedJson.optString(JsonKeyword.TIME_TO_LIVE.text).toInt(),
-        parsedJson.optString(JsonKeyword.FROM.text),
-        parsedJson.optString(JsonKeyword.MESSAGE_ID.text),
-        parsedJson.optString(JsonKeyword.MESSAGE_TYPE.text).ifEmpty { null }
+        parsedJson.getJsonObject(JsonKeyword.DATA.text).toString(),
+        parsedJson.getInt(JsonKeyword.TIME_TO_LIVE.text),
+        parsedJson.getString(JsonKeyword.FROM.text),
+        parsedJson.getString(JsonKeyword.MESSAGE_ID.text),
+        parsedJson.getString(JsonKeyword.MESSAGE_TYPE.text, null)
     )
 }
 
