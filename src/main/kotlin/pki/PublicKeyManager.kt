@@ -8,11 +8,13 @@ object PublicKeyManager : KLogging() {
     // Maps firebase instance id (notification key) to public key.
     private val userKeys: HashMap<String, String> = hashMapOf()
 
-    fun addPublicKey(user: String, publicKey: String) {
-        if (user in userKeys)
+    fun maybeAddPublicKey(user: String, publicKey: String): Boolean {
+        if (user in userKeys) {
             logger.warn("User $user already has a registered public key.")
-        else
+            return false
+        }
         userKeys[user] = publicKey
+        return true
     }
 
     fun getPublicKey(user: String): String? {

@@ -40,3 +40,6 @@ fun packetDetails(packet: Stanza): String {
         packet.toXML(null): ${prettyFormatXML(packet.toXML(null).toString(), 2)}
     """.trimIndent()
 }
+
+fun removeWhitespacesAndNewlines(s: String): String =
+    s.replace("\n", "").replace("\\s+".toRegex(), "")

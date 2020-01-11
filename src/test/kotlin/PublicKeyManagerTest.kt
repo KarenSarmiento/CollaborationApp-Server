@@ -14,7 +14,7 @@ class PublicKeyManagerTest {
         val key = "key1"
 
         // WHEN
-        PublicKeyManager.addPublicKey(user, key)
+        PublicKeyManager.maybeAddPublicKey(user, key)
 
         // THEN
         val actualKey = PublicKeyManager.getPublicKey(user)
@@ -29,8 +29,8 @@ class PublicKeyManagerTest {
         val key2 = "key2"
 
         // WHEN
-        PublicKeyManager.addPublicKey(user, key1)
-        PublicKeyManager.addPublicKey(user, key2)
+        PublicKeyManager.maybeAddPublicKey(user, key1)
+        PublicKeyManager.maybeAddPublicKey(user, key2)
 
         // THEN
         val actualKey = PublicKeyManager.getPublicKey(user)
@@ -45,7 +45,7 @@ class PublicKeyManagerTest {
         val key = "key1"
 
         // WHEN
-        PublicKeyManager.addPublicKey(user1, key)
+        PublicKeyManager.maybeAddPublicKey(user1, key)
         PublicKeyManager.updateNotificationKey(user1, user2)
 
         // THEN

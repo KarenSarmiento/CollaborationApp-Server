@@ -1,47 +1,63 @@
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
+import api.UpstreamRequestHandler
+import io.mockk.*
 import org.jivesoftware.smack.packet.Stanza
-import org.jivesoftware.smack.tcp.XMPPTCPConnection
+import org.jivesoftware.smack.util.PacketParserUtils
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import xmpp.FirebaseClient
-import org.jivesoftware.smack.util.PacketParserUtils
 import org.junit.jupiter.api.Assertions.assertTrue
+import utils.FirebasePacket
+import utils.removeWhitespacesAndNewlines
 
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class FirebaseClientTest {
 
     @Test
-    fun `given an upstream packet, processStanza sends an ack with the correct params`() {
+    fun `processStanza detects and handles arbitrary upstream packets (no message type)`() {
         // GIVEN
-        // Mock xmpp connection and store calls to sendStanza.
-        val xmppConnMock = mockk<XMPPTCPConnection>()
-        val result = slot<Stanza>()
-        every { xmppConnMock.sendStanza(capture(result)) } answers {}
-        val firebaseClient = FirebaseClient(xmppConnMock)
-        // Mock receipt of the following message
+        val dataJson = "{\"upstream_type\":\"test\"}"
+        val ttl = 1
+        val userFrom = "user-abc"
+        val messageId = "123"
+        val messageType = null
         val xmlString = """
             <message xmlns="jabber:client" to="senderid@fcm.googleapis.com" from="devices@gcm.googleapis.com" type="normal">
                 <gcm xmlns="google:mobile:data" xmlns:stream="http://etherx.jabber.org/streams">
                     {
-                        "data": {
-                            "test": "message",
-                        },
-                        "time_to_live": 86400,
-                        "from": "abc",
-                        "message_id": "123",
-                        "category": "test-category"
+                        "data": $dataJson,
+                        "time_to_live": "$ttl",
+                        "from": "$userFrom",
+                        "message_id": "$messageId"
                     }
                 </gcm>
             </message>
         """.trimIndent().replace("\n", "").replace("\\s+".toRegex(), " ")
-        println(xmlString)
-        val stanza = PacketParserUtils.parseStanza<Stanza>(xmlString)
+        val firebaseClientMock = spyk<FirebaseClient>()
+        val urhMock = spyk<UpstreamRequestHandler>()
+        every { urhMock.handleUpstreamRequests(any(), any()) } answers {}
+        val testStanza = PacketParserUtils.parseStanza<Stanza>(xmlString)
 
         // WHEN
-        firebaseClient.processStanza(stanza)
+        firebaseClientMock.processStanzaTestable(urhMock, testStanza)
+
+        // THEN
+        val expectedFirebasePacket = FirebasePacket(dataJson, ttl, userFrom, messageId, messageType)
+        verify {urhMock.handleUpstreamRequests(firebaseClientMock, expectedFirebasePacket)}
+    }
+
+    // TODO: Test cases such as invalid user id or message id
+    @Test
+    fun `sendAck creates ack in correct format`() {
+        // GIVEN
+        val from = "user-abc"
+        val messageId = "123"
+        val firebaseClientMock = spyk<FirebaseClient>()
+        val result = slot<Stanza>()
+        every { firebaseClientMock["sendStanza"](capture(result)) } answers {}
+
+        // WHEN
+        firebaseClientMock.sendAck(from, messageId)
 
         // THEN
         val actualAck = removeWhitespacesAndNewlines(result.captured.toXML(null).toString())
@@ -50,15 +66,12 @@ class FirebaseClientTest {
                 <gcm xmlns="google:mobile:data">
                     \{
                         "message_type":"ack",
-                        "from":"abc",
+                        "from":"user-abc",
                         "message_id":"123"
                     \}
                 </gcm>
             </message>
-        """).toRegex()//.trimIndent().replace("\n", "").replace("\\s+".toRegex(), "").toRegex()
+        """).toRegex()
         assertTrue(expectedAckRegex matches actualAck)
     }
-
-    private fun removeWhitespacesAndNewlines(s: String): String =
-        s.replace("\n", "").replace("\\s+".toRegex(), "")
 }

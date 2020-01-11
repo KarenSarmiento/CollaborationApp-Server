@@ -1,4 +1,4 @@
-package api
+package utils
 
 import org.json.JSONObject
 
@@ -12,7 +12,9 @@ enum class JsonKeyword(val text: String) {
 
     // Upstream Packets
     UPSTREAM_TYPE("upstream_type"),
-    NEW_PUBLIC_KEY("new_public_key")
+    NEW_PUBLIC_KEY("new_public_key"),
+    USER_TOKEN("user_token"),
+    PUBLIC_KEY("public_key")
 }
 
 fun jsonStringToFirebasePacket(json: String) : FirebasePacket {
@@ -26,6 +28,5 @@ fun jsonStringToFirebasePacket(json: String) : FirebasePacket {
     )
 }
 
-// TODO: Create further data classes to encapsulate different message types e.g. ACK.
 data class FirebasePacket(
     val data: String, val ttl: Int, val from: String, val messageId: String, val messageType: String?)

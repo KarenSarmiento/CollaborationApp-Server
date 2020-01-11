@@ -1,8 +1,8 @@
 package xmpp
 
-import api.FirebasePacket
-import api.JsonKeyword as Jk
-import api.jsonStringToFirebasePacket
+import api.UpstreamRequestHandler
+import utils.JsonKeyword as Jk
+import utils.jsonStringToFirebasePacket
 import mu.KLogging
 import utils.Constants
 import org.jivesoftware.smack.*
@@ -25,15 +25,12 @@ import utils.prettyFormatJSON
 import utils.prettyFormatXML
 import java.util.HashMap
 
+/**
+ *  Handles XMPP-level connection between self and Firebase.
+ */
+object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener, KLogging() {
 
-class FirebaseClient() : StanzaListener, ConnectionListener, ReconnectionListener {
-
-    private companion object: KLogging()
     private var xmppConn: XMPPTCPConnection? = null
-
-    constructor(xmppConn: XMPPTCPConnection?): this() {
-        this.xmppConn = xmppConn
-    }
 
     fun connectToFirebase() {
         // Allow connection to be resumed if it is ever lost.
@@ -95,7 +92,12 @@ class FirebaseClient() : StanzaListener, ConnectionListener, ReconnectionListene
         xmppConn?.login(username, Constants.SERVER_KEY)
     }
 
+    // I'm not tested - processStanzaTestable is. Avoid changing me.
     override fun processStanza(packet: Stanza) {
+        processStanzaTestable(UpstreamRequestHandler, packet)
+    }
+
+    fun processStanzaTestable(urh: UpstreamRequestHandler, packet: Stanza) {
         logger.info("\n---- Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id} ----")
         val xmlString = prettyFormatXML(packet.toXML(null).toString(), 2)
         logger.info("Received: $xmlString")
@@ -108,35 +110,39 @@ class FirebaseClient() : StanzaListener, ConnectionListener, ReconnectionListene
             Jk.ACK.text -> logger.info("Warning: ACK receipt not yet supported.")
             Jk.NACK.text -> logger.info("Warning: NACK receipt not yet supported.")
             Jk.CONTROL.text -> logger.info("Warning: Control message receipt not yet supported.")
-            else -> handleUpstreamMessage(firebasePacket) // upstream has unspecified message type.
+            else -> urh.handleUpstreamRequests(this, firebasePacket) // upstream has unspecified message type.
         }
         logger.info("---- End of packet processing ----\n")
     }
 
-    private fun handleUpstreamMessage(packet: FirebasePacket) {
-        logger.info("This message is an upstream message.")
-        sendAck(packet.from, packet.messageId)
+    fun sendAck(from: String, messageId: String) {
+        // TODO: Exponential backoff in case of connection failure?
+        val ackJson = createAckJson(from, messageId)
+        sendJson(ackJson)
+    }
 
-        // An upstream packet must have a JSON in the data component.
-        val data = JSONObject(packet.data)
-        when(data.getString(Jk.UPSTREAM_TYPE.text)) {
-            Jk.NEW_PUBLIC_KEY.text -> api.handleNewPublicKeyRequest(data)
-            else -> logger.warn("Upstream message type ${data.getString(Jk.UPSTREAM_TYPE.text)} unsupported.")
+    fun sendJson(json: String) {
+        // TODO: Exponential Backoff -> must you also apply this to ACKs?
+        val message = FcmPacketExtension(json).toPacket()
+        sendStanza(message)
+    }
+
+    private fun sendStanza(stanza: Stanza) {
+        val xmppConnLocal = xmppConn
+        if (xmppConnLocal != null) {
+            xmppConnLocal.sendStanza(stanza)
+        } else {
+            // TODO: Do something in case connection is lost.
+            logger.error("Could not send stanza since connection is null.")
         }
     }
 
-    private fun sendAck(from: String, messageId: String) {
-        // Create ACK JSON
+    private fun createAckJson(from: String, messageId: String): String {
         val ackMap = HashMap<String?, Any?>()
         ackMap[Jk.MESSAGE_TYPE.text] = Jk.ACK.text
         ackMap[Jk.FROM.text] = from
         ackMap[Jk.MESSAGE_ID.text] = messageId
-        val jsonString = JSONObject(ackMap).toString()
-        val ack = FcmPacketExtension(jsonString).toPacket()
-
-        // TODO: Exponential backoff in case of connection failure?
-        // Send
-        xmppConn?.sendStanza(ack)
+        return JSONObject(ackMap).toString()
     }
 
     /**
