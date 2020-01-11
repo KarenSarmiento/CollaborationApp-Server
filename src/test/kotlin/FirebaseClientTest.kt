@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import xmpp.FirebaseClient
 import org.junit.jupiter.api.Assertions.assertTrue
+import pki.PublicKeyManager
 import utils.FirebasePacket
 import utils.removeWhitespacesAndNewlines
 
@@ -34,16 +35,17 @@ class FirebaseClientTest {
             </message>
         """.trimIndent().replace("\n", "").replace("\\s+".toRegex(), " ")
         val firebaseClientMock = spyk<FirebaseClient>()
+        val pkmMock = spyk<PublicKeyManager>()
         val urhMock = spyk<UpstreamRequestHandler>()
-        every { urhMock.handleUpstreamRequests(any(), any()) } answers {}
+        every { urhMock.handleUpstreamRequests(any(), any(), any()) } answers {}
         val testStanza = PacketParserUtils.parseStanza<Stanza>(xmlString)
 
         // WHEN
-        firebaseClientMock.processStanzaTestable(urhMock, testStanza)
+        firebaseClientMock.processStanzaTestable(urhMock, pkmMock, testStanza)
 
         // THEN
         val expectedFirebasePacket = FirebasePacket(dataJson, ttl, userFrom, messageId, messageType)
-        verify {urhMock.handleUpstreamRequests(firebaseClientMock, expectedFirebasePacket)}
+        verify {urhMock.handleUpstreamRequests(firebaseClientMock, pkmMock, expectedFirebasePacket)}
     }
 
     // TODO: Test cases such as invalid user id or message id

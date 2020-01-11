@@ -21,6 +21,7 @@ import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.StandardExtensionElement
 import org.jivesoftware.smack.sm.predicates.ForEveryStanza
 import org.json.JSONObject
+import pki.PublicKeyManager
 import utils.prettyFormatJSON
 import utils.prettyFormatXML
 import java.util.HashMap
@@ -94,10 +95,10 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
 
     // I'm not tested - processStanzaTestable is. Avoid changing me.
     override fun processStanza(packet: Stanza) {
-        processStanzaTestable(UpstreamRequestHandler, packet)
+        processStanzaTestable(UpstreamRequestHandler, PublicKeyManager, packet)
     }
 
-    fun processStanzaTestable(urh: UpstreamRequestHandler, packet: Stanza) {
+    fun processStanzaTestable(urh: UpstreamRequestHandler, pkm: PublicKeyManager, packet: Stanza) {
         logger.info("\n---- Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id} ----")
         val xmlString = prettyFormatXML(packet.toXML(null).toString(), 2)
         logger.info("Received: $xmlString")
@@ -110,7 +111,7 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
             Jk.ACK.text -> logger.info("Warning: ACK receipt not yet supported.")
             Jk.NACK.text -> logger.info("Warning: NACK receipt not yet supported.")
             Jk.CONTROL.text -> logger.info("Warning: Control message receipt not yet supported.")
-            else -> urh.handleUpstreamRequests(this, firebasePacket) // upstream has unspecified message type.
+            else -> urh.handleUpstreamRequests(this, pkm, firebasePacket) // upstream has unspecified message type.
         }
         logger.info("---- End of packet processing ----\n")
     }
@@ -119,6 +120,14 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
         // TODO: Exponential backoff in case of connection failure?
         val ackJson = createAckJson(from, messageId)
         sendJson(ackJson)
+    }
+
+    private fun createAckJson(from: String, messageId: String): String {
+        val ackMap = HashMap<String?, Any?>()
+        ackMap[Jk.MESSAGE_TYPE.text] = Jk.ACK.text
+        ackMap[Jk.FROM.text] = from
+        ackMap[Jk.MESSAGE_ID.text] = messageId
+        return JSONObject(ackMap).toString()
     }
 
     fun sendJson(json: String) {
@@ -135,14 +144,6 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
             // TODO: Do something in case connection is lost.
             logger.error("Could not send stanza since connection is null.")
         }
-    }
-
-    private fun createAckJson(from: String, messageId: String): String {
-        val ackMap = HashMap<String?, Any?>()
-        ackMap[Jk.MESSAGE_TYPE.text] = Jk.ACK.text
-        ackMap[Jk.FROM.text] = from
-        ackMap[Jk.MESSAGE_ID.text] = messageId
-        return JSONObject(ackMap).toString()
     }
 
     /**

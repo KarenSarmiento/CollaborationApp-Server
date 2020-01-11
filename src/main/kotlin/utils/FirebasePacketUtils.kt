@@ -14,7 +14,13 @@ enum class JsonKeyword(val text: String) {
     UPSTREAM_TYPE("upstream_type"),
     NEW_PUBLIC_KEY("new_public_key"),
     USER_TOKEN("user_token"),
-    PUBLIC_KEY("public_key")
+    PUBLIC_KEY("public_key"),
+
+    // Downstream Packets
+    TO("to"),
+    JSON_TYPE("json_type"), RESPONSE("response"),
+    RESPONSE_ID("response_id"),
+    SUCCESS("success")
 }
 
 fun jsonStringToFirebasePacket(json: String) : FirebasePacket {
