@@ -42,8 +42,22 @@ object UpstreamRequestHandler : KLogging() {
         // Determine type of upstream packet.
         when(upstreamType) {
             Jk.NEW_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, from, messageId)
+            Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(fc, data)
             else -> logger.warn("Upstream message type ${data.getString(Jk.UPSTREAM_TYPE.text)} unsupported.")
         }
+    }
+
+    private fun handleForwardMessageRequest(fc: FirebaseClient, packet: JsonObject) {
+        val forwardId = getStringOrNull(packet, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
+        val jsonUpdate = getStringOrNull(packet, Jk.JSON_UPDATE.text, logger) ?: return
+        val forwardJson = Json.createObjectBuilder()
+            .add(Jk.TO.text, forwardId)
+            .add(Jk.MESSAGE_ID.text, getUniqueId())
+            .add(Jk.DATA.text, Json.createObjectBuilder()
+                .add(Jk.JSON_UPDATE.text, jsonUpdate)
+            )
+            .build().toString()
+        fc.sendJson(forwardJson)
     }
 
     /**

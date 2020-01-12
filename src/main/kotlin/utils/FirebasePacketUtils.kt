@@ -16,14 +16,14 @@ enum class JsonKeyword(val text: String) {
 
     // Upstream Packets
     UPSTREAM_TYPE("upstream_type"),
-    NEW_PUBLIC_KEY("new_public_key"),
-    PUBLIC_KEY("public_key"),
+    NEW_PUBLIC_KEY("new_public_key"), PUBLIC_KEY("public_key"),
+    FORWARD_MESSAGE("forward_message"), FORWARD_TOKEN_ID("forward_token_id"), JSON_UPDATE("json_update"),
 
     // Downstream Packets
     TO("to"),
     JSON_TYPE("json_type"), RESPONSE("response"),
     RESPONSE_ID("response_id"),
-    SUCCESS("success"),
+    SUCCESS("success")
 }
 
 fun jsonStringToJson(jsonString: String): JsonObject = Json.createReader(StringReader(jsonString)).readObject()
