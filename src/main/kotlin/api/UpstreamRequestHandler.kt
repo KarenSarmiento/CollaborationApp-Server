@@ -89,7 +89,6 @@ object UpstreamRequestHandler : KLogging() {
                 .add(Jk.SUCCESS.text, outcome)
             )
             .build().toString()
-
         fc.sendJson(responseJson)
     }
 

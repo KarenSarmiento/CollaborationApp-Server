@@ -23,7 +23,6 @@ class FirebaseClientTest {
         val ttl = 1
         val userFrom = "user-abc"
         val messageId = "123"
-        val messageType = null
         val xmlString = """
             <message xmlns="jabber:client" to="senderid@fcm.googleapis.com" from="devices@gcm.googleapis.com" type="normal">
                 <gcm xmlns="google:mobile:data" xmlns:stream="http://etherx.jabber.org/streams">
