@@ -2,9 +2,7 @@ package xmpp
 
 import api.UpstreamRequestHandler
 import utils.JsonKeyword as Jk
-import utils.jsonStringToFirebasePacket
 import mu.KLogging
-import utils.Constants
 import org.jivesoftware.smack.*
 import org.jivesoftware.smack.packet.Stanza
 import org.jivesoftware.smack.roster.Roster
@@ -21,8 +19,7 @@ import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.StandardExtensionElement
 import org.jivesoftware.smack.sm.predicates.ForEveryStanza
 import pki.PublicKeyManager
-import utils.prettyFormatJSON
-import utils.prettyFormatXML
+import utils.*
 import javax.json.Json
 
 /**
@@ -103,14 +100,14 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
         logger.info("Received: $xmlString")
 
         val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
+        val extendedPacketJson = jsonStringToJson(extendedPacket.text)
         logger.info("extendedPacket.text: ${prettyFormatJSON(extendedPacket.text, 2)}")
-        val firebasePacket = jsonStringToFirebasePacket(extendedPacket.text)
 
-        when(firebasePacket.messageType) {
+        when(extendedPacketJson.getString(Jk.MESSAGE_TYPE.text, null)) {
             Jk.ACK.text -> logger.info("Warning: ACK receipt not yet supported.")
             Jk.NACK.text -> logger.info("Warning: NACK receipt not yet supported.")
             Jk.CONTROL.text -> logger.info("Warning: Control message receipt not yet supported.")
-            else -> urh.handleUpstreamRequests(this, pkm, firebasePacket) // upstream has unspecified message type.
+            else -> urh.handleUpstreamRequests(this, pkm, extendedPacketJson) // upstream has unspecified message type.
         }
         logger.info("---- End of packet processing ----\n")
     }

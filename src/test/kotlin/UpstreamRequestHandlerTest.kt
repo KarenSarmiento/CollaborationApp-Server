@@ -3,10 +3,11 @@ import io.mockk.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import pki.PublicKeyManager
-import utils.FirebasePacket
-import utils.jsonStringToFirebasePacket
+import utils.JsonKeyword as Jk
+import utils.jsonStringToJson
 import utils.removeWhitespacesAndNewlines
 import xmpp.FirebaseClient
+import javax.json.Json
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class UpstreamRequestHandlerTest {
@@ -15,7 +16,7 @@ class UpstreamRequestHandlerTest {
         // GIVEN
         val userFrom = "user-abc"
         val messageId = "123"
-        val firebasePacket = jsonStringToFirebasePacket("""
+        val upstreamJsonPacket = jsonStringToJson("""
             {
                 "data": {
                     "upstream_type": "test"
@@ -30,7 +31,7 @@ class UpstreamRequestHandlerTest {
         every { firebaseClientMock.sendAck(userFrom, messageId) } answers {}
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(firebaseClientMock, spyk(), firebasePacket)
+        UpstreamRequestHandler.handleUpstreamRequests(firebaseClientMock, spyk(), upstreamJsonPacket)
 
         // THEN
         verify { firebaseClientMock.sendAck(userFrom, messageId) }
@@ -53,37 +54,42 @@ class UpstreamRequestHandlerTest {
         every { fcMock.sendAck(any(), any()) } answers {}
         val pkmMock = spyk<PublicKeyManager>()
         every { pkmMock.maybeAddPublicKey(any(), any()) } answers { pkmRegistrationSuccess }
-        val ttl = 1
         val from = "user-abc"
         val messageId = "123"
-        val messageType = null
+        val ttl = 1
+        val category = "testCategory"
         val publicKey = "key-456"
-        val data = """
-            {
-                "upstream_type" : "new_public_key",
-                "user_token" : "$from",
-                "public_key" : "$publicKey"
-            }
-        """.trimIndent()
-        val firebasePacket = FirebasePacket(data, ttl, from, messageId, messageType)
+        val requestJson = Json.createObjectBuilder()
+            .add(Jk.FROM.text, from)
+            .add(Jk.MESSAGE_ID.text, messageId)
+            .add(Jk.TIME_TO_LIVE.text, ttl)
+            .add(Jk.CATEGORY.text, category)
+            .add(Jk.DATA.text, Json.createObjectBuilder()
+                .add(Jk.UPSTREAM_TYPE.text, Jk.NEW_PUBLIC_KEY.text)
+                .add(Jk.PUBLIC_KEY.text, publicKey)
+            )
+            .build()
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(fcMock, pkmMock, firebasePacket)
+        UpstreamRequestHandler.handleUpstreamRequests(fcMock, pkmMock, requestJson)
 
         // THEN
         val expectedJson = removeWhitespacesAndNewlines("""
-            {
+            \{
                 "to": "$from",
-                "data": {
+                "message_id": "(.)+",
+                "data": \{
                     "json_type": "response",
                     "response_id": "$messageId",
                     "success": $pkmRegistrationSuccess
-                }
-            }
-        """)
+                \}
+            \}
+        """).toRegex()
         verify(exactly = 1) {
             fcMock.sendJson(any()) // ack
-            fcMock.sendJson(expectedJson)
+            fcMock.sendJson( match {
+                removeWhitespacesAndNewlines(it) matches expectedJson
+            } )
         }
     }
 }

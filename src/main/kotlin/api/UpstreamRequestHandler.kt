@@ -2,8 +2,7 @@ package api
 
 import mu.KLogging
 import pki.PublicKeyManager
-import utils.FirebasePacket
-import utils.jsonStringToJson
+import utils.*
 import xmpp.FirebaseClient
 import javax.json.Json
 import javax.json.JsonObject
@@ -15,17 +14,34 @@ import utils.JsonKeyword as Jk
 object UpstreamRequestHandler : KLogging() {
 
     /**
-     *  Handles all upstream requests. This currently supports:
+     *  Handles all upstream requests. Upstream packets come in the following form:
+     *  {
+     *      "from": <user-instance-id>,
+     *      "message_id": <message-id>,
+     *      "time_to_live": <ttl>,
+     *      "category": "com.karensarmiento.collaborationapp"
+     *      "data": {
+     *          "upstream_type": <upstream-type>,
+     *          <upstream-type-specific fields>
+     *      }
+     *  }
+     *
+     *  This method currently supports the following upstream types:
      *  - Registering public key for new notification token.
      */
-    fun handleUpstreamRequests(fc: FirebaseClient, pkm: PublicKeyManager, packet: FirebasePacket) {
+    fun handleUpstreamRequests(fc: FirebaseClient, pkm: PublicKeyManager, packet: JsonObject) {
         logger.info("This message is an upstream message.")
-        fc.sendAck(packet.from, packet.messageId)
+        // All upstream packets must have to following fields. If null, then log error and return.
+        val from = getStringOrNull(packet, Jk.FROM.text, logger) ?: return
+        val messageId = getStringOrNull(packet, Jk.MESSAGE_ID.text, logger) ?: return
+        val data = getJsonObjectOrNull(packet, Jk.DATA.text, logger) ?: return
+        val upstreamType = getStringOrNull(data, Jk.UPSTREAM_TYPE.text, logger) ?: return
 
-        // An upstream packet must have a JSON in the data component.
-        val data = jsonStringToJson(packet.data)
-        when(data.getString(Jk.UPSTREAM_TYPE.text)) {
-            Jk.NEW_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, packet.from, packet.messageId)
+        fc.sendAck(from, messageId)
+
+        // Determine type of upstream packet.
+        when(upstreamType) {
+            Jk.NEW_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, from, messageId)
             else -> logger.warn("Upstream message type ${data.getString(Jk.UPSTREAM_TYPE.text)} unsupported.")
         }
     }
@@ -37,16 +53,15 @@ object UpstreamRequestHandler : KLogging() {
      *  @param data JSON request from client. An example is shown below:
      *      {
      *          "upstream_type" : "new_public_key",
-     *          "user_token" : "<user-instance-id-token>",
      *          "public_key" : "<public-key>"
      *      }
      *  @param userId name of user requesting to register their public key.
      *  @param messageId messageId of request.
      */
-    private fun handleNewPublicKeyRequest(fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, messageId: String) {
-        val userToken = data.getString(Jk.USER_TOKEN.text)
+    private fun handleNewPublicKeyRequest(
+        fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, messageId: String) {
         val publicKey = data.getString(Jk.PUBLIC_KEY.text)
-        val outcome = pkm.maybeAddPublicKey(userToken, publicKey)
+        val outcome = pkm.maybeAddPublicKey(userId, publicKey)
         sendRequestOutcomeResponse(fc, userId, messageId, outcome)
     }
 
@@ -67,6 +82,7 @@ object UpstreamRequestHandler : KLogging() {
         fc: FirebaseClient, userId: String, requestId: String, outcome: Boolean) {
         val responseJson = Json.createObjectBuilder()
             .add(Jk.TO.text, userId)
+            .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.JSON_TYPE.text, Jk.RESPONSE.text)
                 .add(Jk.RESPONSE_ID.text, requestId)

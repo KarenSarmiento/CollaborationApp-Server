@@ -7,9 +7,10 @@ import org.junit.jupiter.api.TestInstance
 import xmpp.FirebaseClient
 import org.junit.jupiter.api.Assertions.assertTrue
 import pki.PublicKeyManager
-import utils.FirebasePacket
-import utils.prettyFormatJSON
+import utils.jsonStringToJson
 import utils.removeWhitespacesAndNewlines
+import utils.JsonKeyword as Jk
+import javax.json.Json
 
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -18,7 +19,7 @@ class FirebaseClientTest {
     @Test
     fun `processStanza detects and handles arbitrary upstream packets (no message type)`() {
         // GIVEN
-        val dataJson = "{\"upstream_type\":\"test\"}"
+        val dataJsonString = "{\"upstream_type\":\"test\"}"
         val ttl = 1
         val userFrom = "user-abc"
         val messageId = "123"
@@ -27,7 +28,7 @@ class FirebaseClientTest {
             <message xmlns="jabber:client" to="senderid@fcm.googleapis.com" from="devices@gcm.googleapis.com" type="normal">
                 <gcm xmlns="google:mobile:data" xmlns:stream="http://etherx.jabber.org/streams">
                     {
-                        "data": $dataJson,
+                        "data": $dataJsonString,
                         "time_to_live": $ttl,
                         "from": "$userFrom",
                         "message_id": "$messageId"
@@ -45,8 +46,14 @@ class FirebaseClientTest {
         firebaseClientMock.processStanzaTestable(urhMock, pkmMock, testStanza)
 
         // THEN
-        val expectedFirebasePacket = FirebasePacket(dataJson, ttl, userFrom, messageId, messageType)
-        verify {urhMock.handleUpstreamRequests(firebaseClientMock, pkmMock, expectedFirebasePacket)}
+        val dataJson = jsonStringToJson(dataJsonString)
+        val expectedRequestJson = Json.createObjectBuilder()
+            .add(Jk.DATA.text, dataJson)
+            .add(Jk.TIME_TO_LIVE.text, ttl)
+            .add(Jk.FROM.text, userFrom)
+            .add(Jk.MESSAGE_ID.text, messageId)
+            .build()
+        verify {urhMock.handleUpstreamRequests(firebaseClientMock, pkmMock, expectedRequestJson)}
     }
 
     // TODO: Test cases such as invalid user id or message id
@@ -76,13 +83,5 @@ class FirebaseClientTest {
             </message>
         """).toRegex()
         assertTrue(expectedAckRegex matches actualAck)
-    }
-
-    @Test
-    fun `test`() {
-        print(
-        prettyFormatJSON("""
-            {"a":2,"b":{"c":3}}
-        """.trimIndent(),2))
     }
 }
