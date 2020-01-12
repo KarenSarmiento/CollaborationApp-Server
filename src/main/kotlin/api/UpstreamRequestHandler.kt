@@ -47,9 +47,20 @@ object UpstreamRequestHandler : KLogging() {
         }
     }
 
-    private fun handleForwardMessageRequest(fc: FirebaseClient, packet: JsonObject) {
-        val forwardId = getStringOrNull(packet, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
-        val jsonUpdate = getStringOrNull(packet, Jk.JSON_UPDATE.text, logger) ?: return
+    /**
+     *  Handle upstream client request to forward a json update.
+     *
+     *  @param fc FirebaseClient reference
+     *  @param data JSON request from client. An example is shown below:
+     *      {
+     *          "upstream_type" : "forward_message",
+     *          "forward_token_id" : <token-to-forward-to>
+     *          "json_update" : "<json-to-be-forwarded>"
+     *      }
+     */
+    private fun handleForwardMessageRequest(fc: FirebaseClient, data: JsonObject) {
+        val forwardId = getStringOrNull(data, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
+        val jsonUpdate = getStringOrNull(data, Jk.JSON_UPDATE.text, logger) ?: return
         val forwardJson = Json.createObjectBuilder()
             .add(Jk.TO.text, forwardId)
             .add(Jk.MESSAGE_ID.text, getUniqueId())
@@ -63,6 +74,7 @@ object UpstreamRequestHandler : KLogging() {
     /**
      *  Handle upstream client request to register their public key.
      *
+     *  @param fc FirebaseClient reference
      *  @param pkm PublicKeyManager reference.
      *  @param data JSON request from client. An example is shown below:
      *      {
