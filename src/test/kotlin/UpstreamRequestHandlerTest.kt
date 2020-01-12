@@ -38,6 +38,51 @@ class UpstreamRequestHandlerTest {
     }
 
     @Test
+    fun `upstream requests of type forward_message are forwarded correctly`() {
+        // GIVEN
+        val fcMock = spyk<FirebaseClient>()
+        every { fcMock.sendJson(any()) } answers {}
+        every { fcMock.sendAck(any(), any()) } answers {}
+        val deviceGroupToken = "device-group-abc"
+        val jsonUpdate = "test-update-json"
+        val upstreamJsonPacket = jsonStringToJson("""
+            {
+                "data": {
+                    "upstream_type": "forward_message",
+                    "forward_token_id": "$deviceGroupToken",
+                    "json_update": "$jsonUpdate"
+                },
+                "time_to_live": 1,
+                "from": "user-1",
+                "message_id": "123",
+                "category": "test-category"
+            }
+        """.trimIndent())
+
+        // WHEN
+        UpstreamRequestHandler.handleUpstreamRequests(fcMock, spyk(), upstreamJsonPacket)
+
+        // THEN
+        val expectedJson = removeWhitespacesAndNewlines("""
+            \{
+                "to": "$deviceGroupToken",
+                "message_id": "(.)+",
+                "data": \{
+                    "json_update": "$jsonUpdate"
+                \}
+            \}
+        """).toRegex()
+        println("Expected json is:\n$expectedJson")
+
+        verify(exactly = 1) {
+            fcMock.sendJson(any()) // ack
+            fcMock.sendJson( match {
+                removeWhitespacesAndNewlines(it) matches expectedJson
+            } )
+        }
+    }
+
+    @Test
     fun `an upstream request to register a new notification key results in sending a successful response packet`() {
         testRegistrationOfPublicKey(true)
     }

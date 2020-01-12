@@ -16,8 +16,8 @@ object UpstreamRequestHandler : KLogging() {
     /**
      *  Handles all upstream requests. Upstream packets come in the following form:
      *  {
-     *      "from": <user-instance-id>,
-     *      "message_id": <message-id>,
+     *      "from": "<user-instance-id>",
+     *      "message_id": "<message-id>",
      *      "time_to_live": <ttl>,
      *      "category": "com.karensarmiento.collaborationapp"
      *      "data": {
@@ -54,8 +54,17 @@ object UpstreamRequestHandler : KLogging() {
      *  @param data JSON request from client. An example is shown below:
      *      {
      *          "upstream_type" : "forward_message",
-     *          "forward_token_id" : <token-to-forward-to>
+     *          "forward_token_id" : "<token-to-forward-to>"
      *          "json_update" : "<json-to-be-forwarded>"
+     *      }
+     *
+     *  The forwarded packet would then be:
+     *      {
+     *          "to" : "<token-to-forward-to>",
+     *          "message_id" : "<some-new-message-id>",
+     *          "data" : {
+     *              "json_update": "<json-to-be-forwarded>"
+     *          }
      *      }
      */
     private fun handleForwardMessageRequest(fc: FirebaseClient, data: JsonObject) {
