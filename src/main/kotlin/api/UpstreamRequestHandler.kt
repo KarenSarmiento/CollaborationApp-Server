@@ -86,8 +86,9 @@ object UpstreamRequestHandler : KLogging() {
      */
     private fun handleNewPublicKeyRequest(
         fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, messageId: String) {
+        val email = data.getString(Jk.EMAIL.text)
         val publicKey = data.getString(Jk.PUBLIC_KEY.text)
-        val outcome = pkm.maybeAddPublicKey(userId, publicKey)
+        val outcome = pkm.maybeAddPublicKey(email, userId, publicKey)
         sendRequestOutcomeResponse(fc, userId, messageId, outcome)
     }
 

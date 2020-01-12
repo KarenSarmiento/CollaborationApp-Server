@@ -5,33 +5,41 @@ import mu.KLogging
 object PublicKeyManager : KLogging() {
 
     // TODO: Persist keys
-    // Maps firebase instance id (notification key) to public key.
-    private val userKeys: HashMap<String, String> = hashMapOf()
+    // Maps firebase email to instance id (notification key) and public key.
+    private val userKeys: HashMap<String, NotificationAndPublicKey> = hashMapOf()
 
-    fun maybeAddPublicKey(user: String, publicKey: String): Boolean {
-        if (user in userKeys) {
-            logger.warn("User $user already has a registered public key.")
+    fun maybeAddPublicKey(email: String, notKey: String, publicKey: String): Boolean {
+        if (email in userKeys) {
+            logger.warn("User email $email already has a registered public key.")
             return false
         }
-        userKeys[user] = publicKey
+        userKeys[email] = NotificationAndPublicKey(notKey, publicKey)
         return true
     }
 
-    fun getPublicKey(user: String): String? {
-        val publicKey = userKeys[user]
+    fun getPublicKey(email: String): String? {
+        val publicKey = userKeys[email]?.publicKey
         if (publicKey == null)
-            logger.warn("No user has instance ID: $user.")
+            logger.warn("No user has email: $email.")
         return publicKey
     }
 
-    fun updateNotificationKey(oldKey: String, newKey: String) {
-        if (oldKey in userKeys) {
-            val publicKey: String = userKeys[oldKey]!!
-            userKeys.remove(oldKey)
-            userKeys[newKey] = publicKey
+    fun updateNotificationKey(email: String, newNotKey: String) {
+        if (email in userKeys) {
+            val publicKey: String = userKeys[email]!!.publicKey
+            userKeys[email] = NotificationAndPublicKey(newNotKey, publicKey)
         } else {
-            logger.warn("No user has instance ID: $oldKey.")
+            logger.warn("No user has email: $email.")
         }
 
     }
+
+    fun getNotificationKey(email: String): String? {
+        val notKey = userKeys[email]?.notificationKey
+        if (notKey == null)
+            logger.warn("No user has email: $email.")
+        return notKey
+    }
 }
+
+data class NotificationAndPublicKey(var notificationKey: String, val publicKey: String)

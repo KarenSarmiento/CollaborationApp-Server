@@ -53,11 +53,12 @@ class UpstreamRequestHandlerTest {
         every { fcMock.sendJson(any()) } answers {}
         every { fcMock.sendAck(any(), any()) } answers {}
         val pkmMock = spyk<PublicKeyManager>()
-        every { pkmMock.maybeAddPublicKey(any(), any()) } answers { pkmRegistrationSuccess }
+        every { pkmMock.maybeAddPublicKey(any(), any(), any()) } answers { pkmRegistrationSuccess }
         val from = "user-abc"
         val messageId = "123"
         val ttl = 1
         val category = "testCategory"
+        val email = "test@google.com"
         val publicKey = "key-456"
         val requestJson = Json.createObjectBuilder()
             .add(Jk.FROM.text, from)
@@ -66,9 +67,9 @@ class UpstreamRequestHandlerTest {
             .add(Jk.CATEGORY.text, category)
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.UPSTREAM_TYPE.text, Jk.NEW_PUBLIC_KEY.text)
+                .add(Jk.EMAIL.text, email)
                 .add(Jk.PUBLIC_KEY.text, publicKey)
-            )
-            .build()
+            ).build()
 
         // WHEN
         UpstreamRequestHandler.handleUpstreamRequests(fcMock, pkmMock, requestJson)
