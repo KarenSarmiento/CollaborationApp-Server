@@ -21,10 +21,10 @@ enum class JsonKeyword(val text: String) {
     GET_NOTIFICATION_KEY("get_notification_key"), NOTIFICATION_KEY("notification_key"),
 
     // Downstream Packets
-    TO("to"),
-    JSON_TYPE("json_type"), RESPONSE("response"),
-    REQUEST_ID("request_id"),
-    SUCCESS("success")
+    TO("to"), DOWNSTREAM_TYPE("downstream_type"), REQUEST_ID("request_id"), SUCCESS("success"),
+    GET_NOTIFICATION_KEY_RESPONSE("get_notification_key_response"),
+    REGISTER_PUBLIC_KEY_RESPONSE("register_public_key_response")
+
 }
 
 fun jsonStringToJson(jsonString: String): JsonObject = Json.createReader(StringReader(jsonString)).readObject()

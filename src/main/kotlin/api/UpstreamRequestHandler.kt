@@ -43,7 +43,7 @@ object UpstreamRequestHandler : KLogging() {
         when(upstreamType) {
             Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(fc, data)
             Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(fc, pkm, data, from, messageId)
-            Jk.REGISTER_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, from, messageId)
+            Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(fc, pkm, data, from, messageId)
             else -> logger.warn("Upstream message type ${data.getString(Jk.UPSTREAM_TYPE.text)} unsupported.")
         }
     }
@@ -64,6 +64,7 @@ object UpstreamRequestHandler : KLogging() {
      *          "to" : "<token-to-forward-to>",
      *          "message_id" : "<some-new-message-id>",
      *          "data" : {
+     *              "downstream_type": "json_update",
      *              "json_update": "<json-to-be-forwarded>"
      *          }
      *      }
@@ -75,6 +76,7 @@ object UpstreamRequestHandler : KLogging() {
             .add(Jk.TO.text, forwardId)
             .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
+                .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
                 .add(Jk.JSON_UPDATE.text, jsonUpdate)
             ).build().toString()
         fc.sendJson(forwardJson)
@@ -93,13 +95,13 @@ object UpstreamRequestHandler : KLogging() {
      *  @param userId notification key of user making request.
      *  @param requestId id of message containing request.
      *
-     *  TODO: Add downstream type.
      *  The response would then be:
      *      {
      *          "to" : "<token-to-reply-to>",
      *          "message_id" : "<some-new-message-id>",
      *          "data" : {
-     *              "notification_key": "<user-notification-key>"
+     *              "downstream_type": "get_notification_key_response"
+     *              "notification_key": "<user-notification-key>",
      *              "request_id": "<message-id-of-incoming-request>"
      *          }
      *      }
@@ -107,11 +109,13 @@ object UpstreamRequestHandler : KLogging() {
     private fun handleGetNotificationKeyRequest(
         fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
         val userEmail = getStringOrNull(data, Jk.EMAIL.text, logger) ?: return
+        // TODO: Handle notification key = null.
         val notificationKey = pkm.getNotificationKey(userEmail)
         val responseJson = Json.createObjectBuilder()
             .add(Jk.TO.text, userId)
             .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
+                .add(Jk.DOWNSTREAM_TYPE.text, Jk.GET_NOTIFICATION_KEY_RESPONSE.text)
                 .add(Jk.NOTIFICATION_KEY.text, notificationKey)
                 .add(Jk.REQUEST_ID.text, requestId)
             ).build().toString()
@@ -131,7 +135,7 @@ object UpstreamRequestHandler : KLogging() {
      *  @param userId name of user requesting to register their public key.
      *  @param requestId requestId of request.
      */
-    private fun handleNewPublicKeyRequest(
+    private fun handleRegisterPublicKeyRequest(
         fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
         val email = data.getString(Jk.EMAIL.text)
         val publicKey = data.getString(Jk.PUBLIC_KEY.text)
@@ -145,7 +149,7 @@ object UpstreamRequestHandler : KLogging() {
      *      {
      *          "to": "<user-who-made-request>",
      *          "data": {
-     *              "json_type": "response",
+     *              "downstream_type": "register_public_key_response",
      *              "request_id": "<message-id-of-incoming-request>",
      *              "success": true
      *          }
@@ -158,7 +162,7 @@ object UpstreamRequestHandler : KLogging() {
             .add(Jk.TO.text, userId)
             .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
-                .add(Jk.JSON_TYPE.text, Jk.RESPONSE.text)
+                .add(Jk.DOWNSTREAM_TYPE.text, Jk.REGISTER_PUBLIC_KEY_RESPONSE.text)
                 .add(Jk.REQUEST_ID.text, requestId)
                 .add(Jk.SUCCESS.text, outcome)
             ).build().toString()

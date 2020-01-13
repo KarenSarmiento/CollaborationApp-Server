@@ -68,6 +68,7 @@ class UpstreamRequestHandlerTest {
                 "to": "$deviceGroupToken",
                 "message_id": "(.)+",
                 "data": \{
+                    "downstream_type": "json_update",
                     "json_update": "$jsonUpdate"
                 \}
             \}
@@ -117,6 +118,7 @@ class UpstreamRequestHandlerTest {
                 "to": "$from",
                 "message_id": "(.)+",
                 "data": \{
+                    "downstream_type": "get_notification_key_response",
                     "notification_key": "$notificationKey",
                     "request_id": "$requestId"
                 \}
@@ -174,7 +176,7 @@ class UpstreamRequestHandlerTest {
                 "to": "$from",
                 "message_id": "(.)+",
                 "data": \{
-                    "json_type": "response",
+                    "downstream_type": "register_public_key_response",
                     "request_id": "$messageId",
                     "success": $pkmRegistrationSuccess
                 \}
