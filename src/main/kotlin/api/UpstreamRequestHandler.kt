@@ -100,8 +100,9 @@ object UpstreamRequestHandler : KLogging() {
      *          "to" : "<token-to-reply-to>",
      *          "message_id" : "<some-new-message-id>",
      *          "data" : {
-     *              "downstream_type": "get_notification_key_response"
-     *              "notification_key": "<user-notification-key>",
+     *              "downstream_type": "get_notification_key_response",
+     *              "success": true,
+     *              "notification_key": "<user-notification-key>",      // omitted if success is false.
      *              "request_id": "<message-id-of-incoming-request>"
      *          }
      *      }
@@ -109,17 +110,29 @@ object UpstreamRequestHandler : KLogging() {
     private fun handleGetNotificationKeyRequest(
         fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
         val userEmail = getStringOrNull(data, Jk.EMAIL.text, logger) ?: return
-        // TODO: Handle notification key = null.
         val notificationKey = pkm.getNotificationKey(userEmail)
-        val responseJson = Json.createObjectBuilder()
-            .add(Jk.TO.text, userId)
-            .add(Jk.MESSAGE_ID.text, getUniqueId())
-            .add(Jk.DATA.text, Json.createObjectBuilder()
-                .add(Jk.DOWNSTREAM_TYPE.text, Jk.GET_NOTIFICATION_KEY_RESPONSE.text)
-                .add(Jk.NOTIFICATION_KEY.text, notificationKey)
-                .add(Jk.REQUEST_ID.text, requestId)
-            ).build().toString()
-        fc.sendJson(responseJson)
+        if (notificationKey == null) {
+            val responseJson = Json.createObjectBuilder()
+                .add(Jk.TO.text, userId)
+                .add(Jk.MESSAGE_ID.text, getUniqueId())
+                .add(Jk.DATA.text, Json.createObjectBuilder()
+                    .add(Jk.DOWNSTREAM_TYPE.text, Jk.GET_NOTIFICATION_KEY_RESPONSE.text)
+                    .add(Jk.SUCCESS.text, false)
+                    .add(Jk.REQUEST_ID.text, requestId)
+                ).build().toString()
+            fc.sendJson(responseJson)
+        } else {
+            val responseJson = Json.createObjectBuilder()
+                .add(Jk.TO.text, userId)
+                .add(Jk.MESSAGE_ID.text, getUniqueId())
+                .add(Jk.DATA.text, Json.createObjectBuilder()
+                    .add(Jk.DOWNSTREAM_TYPE.text, Jk.GET_NOTIFICATION_KEY_RESPONSE.text)
+                    .add(Jk.SUCCESS.text, true)
+                    .add(Jk.NOTIFICATION_KEY.text, notificationKey)
+                    .add(Jk.REQUEST_ID.text, requestId)
+                ).build().toString()
+            fc.sendJson(responseJson)
+        }
     }
 
     /**
