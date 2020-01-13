@@ -41,7 +41,7 @@ object UpstreamRequestHandler : KLogging() {
 
         // Determine type of upstream packet.
         when(upstreamType) {
-            Jk.NEW_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, from, messageId)
+            Jk.REGISTER_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, from, messageId)
             Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(fc, data)
             else -> logger.warn("Upstream message type ${data.getString(Jk.UPSTREAM_TYPE.text)} unsupported.")
         }

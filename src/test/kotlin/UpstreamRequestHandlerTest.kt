@@ -111,7 +111,7 @@ class UpstreamRequestHandlerTest {
             .add(Jk.TIME_TO_LIVE.text, ttl)
             .add(Jk.CATEGORY.text, category)
             .add(Jk.DATA.text, Json.createObjectBuilder()
-                .add(Jk.UPSTREAM_TYPE.text, Jk.NEW_PUBLIC_KEY.text)
+                .add(Jk.UPSTREAM_TYPE.text, Jk.REGISTER_PUBLIC_KEY.text)
                 .add(Jk.EMAIL.text, email)
                 .add(Jk.PUBLIC_KEY.text, publicKey)
             ).build()
