@@ -41,8 +41,9 @@ object UpstreamRequestHandler : KLogging() {
 
         // Determine type of upstream packet.
         when(upstreamType) {
-            Jk.REGISTER_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, from, messageId)
             Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(fc, data)
+            Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(fc, pkm, data, from, messageId)
+            Jk.REGISTER_PUBLIC_KEY.text -> handleNewPublicKeyRequest(fc, pkm, data, from, messageId)
             else -> logger.warn("Upstream message type ${data.getString(Jk.UPSTREAM_TYPE.text)} unsupported.")
         }
     }
@@ -75,9 +76,46 @@ object UpstreamRequestHandler : KLogging() {
             .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.JSON_UPDATE.text, jsonUpdate)
-            )
-            .build().toString()
+            ).build().toString()
         fc.sendJson(forwardJson)
+    }
+
+    /**
+     *  Handle upstream client request to find a users notification key.
+     *
+     *  @param fc FirebaseClient reference
+     *  @param pkm PublicKeyManager reference.
+     *  @param data JSON request from client. An example is shown below:
+     *      {
+     *          "upstream_type" : "get_notification_key",
+     *          "email" : "<user-email>"
+     *      }
+     *  @param userId notification key of user making request.
+     *  @param requestId id of message containing request.
+     *
+     *  TODO: Add downstream type.
+     *  The response would then be:
+     *      {
+     *          "to" : "<token-to-reply-to>",
+     *          "message_id" : "<some-new-message-id>",
+     *          "data" : {
+     *              "notification_key": "<user-notification-key>"
+     *              "request_id": "<message-id-of-incoming-request>"
+     *          }
+     *      }
+     */
+    private fun handleGetNotificationKeyRequest(
+        fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
+        val userEmail = getStringOrNull(data, Jk.EMAIL.text, logger) ?: return
+        val notificationKey = pkm.getNotificationKey(userEmail)
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.TO.text, userId)
+            .add(Jk.MESSAGE_ID.text, getUniqueId())
+            .add(Jk.DATA.text, Json.createObjectBuilder()
+                .add(Jk.NOTIFICATION_KEY.text, notificationKey)
+                .add(Jk.REQUEST_ID.text, requestId)
+            ).build().toString()
+        fc.sendJson(responseJson)
     }
 
     /**
@@ -87,29 +125,29 @@ object UpstreamRequestHandler : KLogging() {
      *  @param pkm PublicKeyManager reference.
      *  @param data JSON request from client. An example is shown below:
      *      {
-     *          "upstream_type" : "new_public_key",
+     *          "upstream_type" : "register_public_key",
      *          "public_key" : "<public-key>"
      *      }
      *  @param userId name of user requesting to register their public key.
-     *  @param messageId messageId of request.
+     *  @param requestId requestId of request.
      */
     private fun handleNewPublicKeyRequest(
-        fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, messageId: String) {
+        fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
         val email = data.getString(Jk.EMAIL.text)
         val publicKey = data.getString(Jk.PUBLIC_KEY.text)
         val outcome = pkm.maybeAddPublicKey(email, userId, publicKey)
-        sendRequestOutcomeResponse(fc, userId, messageId, outcome)
+        sendRequestOutcomeResponse(fc, userId, requestId, outcome)
     }
 
     /**
      *  Sends message back to client informing them of an outcome to their message with some messageId.
      *  An example of a successful outcome is shown below:
      *      {
-     *          "to": "user-abc",               // user who made request.
+     *          "to": "<user-who-made-request>",
      *          "data": {
-     *              "json_type": "response",    // indicates that this is response.
-     *              "response_id": "123",       // message_id of request this is responding to.
-     *              "success": true             // outcome.
+     *              "json_type": "response",
+     *              "request_id": "<message-id-of-incoming-request>",
+     *              "success": true
      *          }
      *      }
      *
@@ -121,10 +159,9 @@ object UpstreamRequestHandler : KLogging() {
             .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.JSON_TYPE.text, Jk.RESPONSE.text)
-                .add(Jk.RESPONSE_ID.text, requestId)
+                .add(Jk.REQUEST_ID.text, requestId)
                 .add(Jk.SUCCESS.text, outcome)
-            )
-            .build().toString()
+            ).build().toString()
         fc.sendJson(responseJson)
     }
 

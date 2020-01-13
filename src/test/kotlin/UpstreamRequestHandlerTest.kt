@@ -72,7 +72,56 @@ class UpstreamRequestHandlerTest {
                 \}
             \}
         """).toRegex()
-        println("Expected json is:\n$expectedJson")
+
+        verify(exactly = 1) {
+            fcMock.sendJson(any()) // ack
+            fcMock.sendJson( match {
+                removeWhitespacesAndNewlines(it) matches expectedJson
+            } )
+        }
+    }
+
+    @Test
+    fun `upstream requests of type get_notification_key return notification key if valid`() {
+        // GIVEN
+        val userEmail = "email-abc"
+        val notificationKey = "not-key1"
+        val from = "user-1"
+        val requestId = "request-123"
+
+        val fcMock = spyk<FirebaseClient>()
+        every { fcMock.sendJson(any()) } answers {}
+        every { fcMock.sendAck(any(), any()) } answers {}
+        val pkmMock = spyk<PublicKeyManager>()
+        every { pkmMock.getNotificationKey(userEmail) } answers { notificationKey }
+
+        val upstreamJsonPacket = jsonStringToJson("""
+            {
+                "data": {
+                    "upstream_type": "get_notification_key",
+                    "email": "$userEmail"
+                },
+                "time_to_live": 1,
+                "from": "$from",
+                "message_id": "$requestId",
+                "category": "test-category"
+            }
+        """.trimIndent())
+
+        // WHEN
+        UpstreamRequestHandler.handleUpstreamRequests(fcMock, pkmMock, upstreamJsonPacket)
+
+        // THEN
+        val expectedJson = removeWhitespacesAndNewlines("""
+            \{
+                "to": "$from",
+                "message_id": "(.)+",
+                "data": \{
+                    "notification_key": "$notificationKey",
+                    "request_id": "$requestId"
+                \}
+            \}
+        """).toRegex()
 
         verify(exactly = 1) {
             fcMock.sendJson(any()) // ack
@@ -126,7 +175,7 @@ class UpstreamRequestHandlerTest {
                 "message_id": "(.)+",
                 "data": \{
                     "json_type": "response",
-                    "response_id": "$messageId",
+                    "request_id": "$messageId",
                     "success": $pkmRegistrationSuccess
                 \}
             \}

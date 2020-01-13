@@ -18,11 +18,12 @@ enum class JsonKeyword(val text: String) {
     UPSTREAM_TYPE("upstream_type"),
     REGISTER_PUBLIC_KEY("register_public_key"), PUBLIC_KEY("public_key"), EMAIL("email"),
     FORWARD_MESSAGE("forward_message"), FORWARD_TOKEN_ID("forward_token_id"), JSON_UPDATE("json_update"),
+    GET_NOTIFICATION_KEY("get_notification_key"), NOTIFICATION_KEY("notification_key"),
 
     // Downstream Packets
     TO("to"),
     JSON_TYPE("json_type"), RESPONSE("response"),
-    RESPONSE_ID("response_id"),
+    REQUEST_ID("request_id"),
     SUCCESS("success")
 }
 
