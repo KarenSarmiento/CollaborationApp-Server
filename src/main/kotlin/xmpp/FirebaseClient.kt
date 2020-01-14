@@ -89,9 +89,9 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
         val extendedPacketJson = jsonStringToJson(extendedPacket.text)
 
         when(extendedPacketJson.getString(Jk.MESSAGE_TYPE.text, null)) {
-            Jk.ACK.text -> logger.info("Warning: ACK receipt not yet supported.")
-            Jk.NACK.text -> logger.info("Warning: NACK receipt not yet supported.")
-            Jk.CONTROL.text -> logger.info("Warning: Control message receipt not yet supported.")
+            Jk.ACK.text -> logger.warn("ACK receipt not yet supported.")
+            Jk.NACK.text -> logger.warn("NACK receipt not yet supported.")
+            Jk.CONTROL.text -> logger.warn("Control message receipt not yet supported.")
             else -> urh.handleUpstreamRequests(this, pkm, extendedPacketJson) // upstream has unspecified message type.
         }
     }
