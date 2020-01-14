@@ -21,8 +21,8 @@ fun prettyFormatXML(xmlString: String, indent: Int): String {
     return xmlOutput.writer.toString()
 }
 
-fun prettyFormatJSON(jsonString: String, indent: Int): String {
-    return JSONObject(jsonString).toString(indent)
+fun prettyFormatJSON(jsonString: String): String {
+    return JSONObject(jsonString).toString(2)
 }
 
 fun packetDetails(packet: Stanza): String {

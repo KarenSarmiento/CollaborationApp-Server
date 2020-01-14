@@ -30,7 +30,6 @@ object UpstreamRequestHandler : KLogging() {
      *  - Registering public key for new notification token.
      */
     fun handleUpstreamRequests(fc: FirebaseClient, pkm: PublicKeyManager, packet: JsonObject) {
-        logger.info("This message is an upstream message.")
         // All upstream packets must have to following fields. If null, then log error and return.
         val from = getStringOrNull(packet, Jk.FROM.text, logger) ?: return
         val messageId = getStringOrNull(packet, Jk.MESSAGE_ID.text, logger) ?: return
@@ -40,11 +39,13 @@ object UpstreamRequestHandler : KLogging() {
         fc.sendAck(from, messageId)
 
         // Determine type of upstream packet.
+        logger.info("Received an upstream packet of type: $upstreamType")
         when(upstreamType) {
             Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(fc, data)
             Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(fc, pkm, data, from, messageId)
             Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(fc, pkm, data, from, messageId)
-            else -> logger.warn("Upstream message type ${data.getString(Jk.UPSTREAM_TYPE.text)} unsupported.")
+            else -> logger.warn(
+                "Received an unsupported upstream message type: ${data.getString(Jk.UPSTREAM_TYPE.text)}.")
         }
     }
 
@@ -111,6 +112,8 @@ object UpstreamRequestHandler : KLogging() {
         fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
         val userEmail = getStringOrNull(data, Jk.EMAIL.text, logger) ?: return
         val notificationKey = pkm.getNotificationKey(userEmail)
+        logger.info("Sending notification key for $userEmail to $userId")
+
         if (notificationKey == null) {
             val responseJson = Json.createObjectBuilder()
                 .add(Jk.TO.text, userId)
@@ -143,15 +146,20 @@ object UpstreamRequestHandler : KLogging() {
      *  @param data JSON request from client. An example is shown below:
      *      {
      *          "upstream_type" : "register_public_key",
+     *          "email" : "<user-email>",
      *          "public_key" : "<public-key>"
      *      }
      *  @param userId name of user requesting to register their public key.
      *  @param requestId requestId of request.
+     *
+     *  Note that the notification key is given by the "from" entry in the packet (not data part).
      */
     private fun handleRegisterPublicKeyRequest(
         fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
         val email = data.getString(Jk.EMAIL.text)
         val publicKey = data.getString(Jk.PUBLIC_KEY.text)
+        logger.info("Registering $email with notification key $userId and public key $publicKey")
+
         val outcome = pkm.maybeAddPublicKey(email, userId, publicKey)
         sendRequestOutcomeResponse(fc, userId, requestId, outcome)
     }

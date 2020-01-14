@@ -34,13 +34,13 @@ fun getUniqueId(): String = UUID.randomUUID().toString()
 fun getStringOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): String? {
     val field = jsonObject.getString(fieldName, null)
     if (field == null)
-        logger.error("Missing field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString(), 2)}")
+        logger.error("Missing field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString())}")
     return field
 }
 
 fun getJsonObjectOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): JsonObject? {
     val field = jsonObject.getJsonObject(JsonKeyword.DATA.text)
     if (field == null)
-        logger.error("Missing field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString(), 2)}")
+        logger.error("Missing field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString())}")
     return field
 }

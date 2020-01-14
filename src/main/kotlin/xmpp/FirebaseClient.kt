@@ -17,7 +17,6 @@ import org.jivesoftware.smack.StanzaListener
 import org.jivesoftware.smack.filter.StanzaTypeFilter
 import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.StandardExtensionElement
-import org.jivesoftware.smack.sm.predicates.ForEveryStanza
 import pki.PublicKeyManager
 import utils.*
 import javax.json.Json
@@ -69,15 +68,6 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
         // Handle connection errors
         xmppConn?.addConnectionListener(this)
 
-        // Log all outgoing packets
-        xmppConn?.addStanzaInterceptor(
-            StanzaListener { packet ->
-                val xmlString = prettyFormatXML(packet.toXML(null).toString(), 2)
-                logger.info("Sent: $xmlString")
-            },
-            ForEveryStanza.INSTANCE
-        )
-
         // Handle incoming packets and reject messages that are not from FCM CCS
         xmppConn?.addSyncStanzaListener(
             this,
@@ -95,13 +85,8 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
     }
 
     fun processStanzaTestable(urh: UpstreamRequestHandler, pkm: PublicKeyManager, packet: Stanza) {
-        logger.info("\n---- Processing packet in thread ${Thread.currentThread().name} - ${Thread.currentThread().id} ----")
-        val xmlString = prettyFormatXML(packet.toXML(null).toString(), 2)
-        logger.info("Received: $xmlString")
-
         val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
         val extendedPacketJson = jsonStringToJson(extendedPacket.text)
-        logger.info("extendedPacket.text: ${prettyFormatJSON(extendedPacket.text, 2)}")
 
         when(extendedPacketJson.getString(Jk.MESSAGE_TYPE.text, null)) {
             Jk.ACK.text -> logger.info("Warning: ACK receipt not yet supported.")
@@ -109,7 +94,6 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
             Jk.CONTROL.text -> logger.info("Warning: Control message receipt not yet supported.")
             else -> urh.handleUpstreamRequests(this, pkm, extendedPacketJson) // upstream has unspecified message type.
         }
-        logger.info("---- End of packet processing ----\n")
     }
 
     fun sendAck(from: String, messageId: String) {
@@ -127,6 +111,7 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
     }
 
     fun sendJson(json: String) {
+        logger.info("Sending json: ${prettyFormatJSON(json)}")
         // TODO: Exponential Backoff -> must you also apply this to ACKs?
         val message = FcmPacketExtension(json).toPacket()
         sendStanza(message)
