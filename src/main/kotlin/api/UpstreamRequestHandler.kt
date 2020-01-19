@@ -119,7 +119,6 @@ object UpstreamRequestHandler : KLogging() {
         val failedEmails = Json.createArrayBuilder()// assumes all emails sent to firebase are successfully added.
         for (peerEmail in memberEmails) {
             val peerEmailString = peerEmail.toString().removeSurrounding("\"")
-            logger.info("Handling peerEmailString=$peerEmailString")
             val peerToken = mr.pkm.getNotificationKey(peerEmailString)
             if (peerToken == null)
                 failedEmails.add(peerEmailString)
@@ -129,7 +128,6 @@ object UpstreamRequestHandler : KLogging() {
         val allMembers = allMembersBuilder.add(userId).build()
 
         // Crate a new group and return result.
-        logger.info("Calling maybeCreateGroup with groupId=$groupId and regIds=$allMembers")
         val groupKey = mr.gm.maybeCreateGroup(groupId, allMembers)
         if (groupKey == null) {
             sendRequestOutcomeResponse(mr, Jk.CREATE_GROUP_RESPONSE.text, userId, requestId, false)
