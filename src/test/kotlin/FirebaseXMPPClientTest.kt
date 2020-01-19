@@ -4,17 +4,17 @@ import org.jivesoftware.smack.packet.Stanza
 import org.jivesoftware.smack.util.PacketParserUtils
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import xmpp.FirebaseClient
+import firebaseconnection.FirebaseXMPPClient
 import org.junit.jupiter.api.Assertions.assertTrue
-import pki.PublicKeyManager
-import utils.jsonStringToJson
+import utils.MockableRes
+import utils.jsonStringToJsonObject
 import utils.removeWhitespacesAndNewlines
 import utils.JsonKeyword as Jk
 import javax.json.Json
 
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class FirebaseClientTest {
+class FirebaseXMPPClientTest {
 
     @Test
     fun `processStanza detects and handles arbitrary upstream packets (no message type)`() {
@@ -35,24 +35,27 @@ class FirebaseClientTest {
                 </gcm>
             </message>
         """.trimIndent().replace("\n", "").replace("\\s+".toRegex(), " ")
-        val firebaseClientMock = spyk<FirebaseClient>()
-        val pkmMock = spyk<PublicKeyManager>()
+        val fcMock = spyk<FirebaseXMPPClient>()
         val urhMock = spyk<UpstreamRequestHandler>()
-        every { urhMock.handleUpstreamRequests(any(), any(), any()) } answers {}
+        every { urhMock.handleUpstreamRequests(any(), any()) } answers {}
+        val mrMock = spyk<MockableRes>()
+        every { mrMock.fc } answers { fcMock }
+        every { mrMock.urh } answers { urhMock }
+
         val testStanza = PacketParserUtils.parseStanza<Stanza>(xmlString)
 
         // WHEN
-        firebaseClientMock.processStanzaTestable(urhMock, pkmMock, testStanza)
+        fcMock.processStanzaTestable(mrMock, testStanza)
 
         // THEN
-        val dataJson = jsonStringToJson(dataJsonString)
+        val dataJson = jsonStringToJsonObject(dataJsonString)
         val expectedRequestJson = Json.createObjectBuilder()
             .add(Jk.DATA.text, dataJson)
             .add(Jk.TIME_TO_LIVE.text, ttl)
             .add(Jk.FROM.text, userFrom)
             .add(Jk.MESSAGE_ID.text, messageId)
             .build()
-        verify {urhMock.handleUpstreamRequests(firebaseClientMock, pkmMock, expectedRequestJson)}
+        verify {urhMock.handleUpstreamRequests(mrMock, expectedRequestJson)}
     }
 
     // TODO: Test cases such as invalid user id or message id
@@ -61,12 +64,12 @@ class FirebaseClientTest {
         // GIVEN
         val from = "user-abc"
         val messageId = "123"
-        val firebaseClientMock = spyk<FirebaseClient>()
+        val fcMock = spyk<FirebaseXMPPClient>()
         val result = slot<Stanza>()
-        every { firebaseClientMock["sendStanza"](capture(result)) } answers {}
+        every { fcMock["sendStanza"](capture(result)) } answers {}
 
         // WHEN
-        firebaseClientMock.sendAck(from, messageId)
+        fcMock.sendAck(from, messageId)
 
         // THEN
         val actualAck = removeWhitespacesAndNewlines(result.captured.toXML(null).toString())

@@ -5,6 +5,7 @@ object Constants {
     const val FCM_PROD_PORT = 5235
     const val FCM_TEST_PORT = 5236
     const val FCM_SERVER_AUTH_CONNECTION = "fcm.googleapis.com"
+    const val DEVICE_GROUP_URL = "https://fcm.googleapis.com/fcm/notification"
 
     const val FCM_ELEMENT_NAME = "gcm"
     const val FCM_NAMESPACE = "google:mobile:data"

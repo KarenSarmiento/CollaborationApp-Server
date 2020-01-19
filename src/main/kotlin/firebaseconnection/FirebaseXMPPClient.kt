@@ -1,4 +1,4 @@
-package xmpp
+package firebaseconnection
 
 import api.UpstreamRequestHandler
 import utils.JsonKeyword as Jk
@@ -24,7 +24,7 @@ import javax.json.Json
 /**
  *  Handles XMPP-level connection between self and Firebase.
  */
-object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener, KLogging() {
+object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionListener, KLogging() {
 
     private var xmppConn: XMPPTCPConnection? = null
 
@@ -79,20 +79,19 @@ object FirebaseClient : StanzaListener, ConnectionListener, ReconnectionListener
         xmppConn?.login(username, Constants.SERVER_KEY)
     }
 
-    // I'm not tested - processStanzaTestable is. Avoid changing me.
     override fun processStanza(packet: Stanza) {
-        processStanzaTestable(UpstreamRequestHandler, PublicKeyManager, packet)
+        processStanzaTestable(MockableRes, packet)
     }
 
-    fun processStanzaTestable(urh: UpstreamRequestHandler, pkm: PublicKeyManager, packet: Stanza) {
+    fun processStanzaTestable(mr: MockableRes, packet: Stanza) {
         val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
-        val extendedPacketJson = jsonStringToJson(extendedPacket.text)
+        val extendedPacketJson = jsonStringToJsonObject(extendedPacket.text)
 
         when(extendedPacketJson.getString(Jk.MESSAGE_TYPE.text, null)) {
             Jk.ACK.text -> logger.warn("ACK receipt not yet supported.")
             Jk.NACK.text -> logger.warn("NACK receipt not yet supported.")
             Jk.CONTROL.text -> logger.warn("Control message receipt not yet supported.")
-            else -> urh.handleUpstreamRequests(this, pkm, extendedPacketJson) // upstream has unspecified message type.
+            else -> mr.urh.handleUpstreamRequests(mr, extendedPacketJson) // upstream has unspecified message type.
         }
     }
 

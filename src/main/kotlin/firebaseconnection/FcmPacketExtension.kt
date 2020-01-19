@@ -1,4 +1,4 @@
-package xmpp
+package firebaseconnection
 
 import utils.Constants
 import org.jivesoftware.smack.packet.ExtensionElement

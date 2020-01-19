@@ -3,7 +3,6 @@ package api
 import mu.KLogging
 import pki.PublicKeyManager
 import utils.*
-import xmpp.FirebaseClient
 import javax.json.Json
 import javax.json.JsonObject
 import utils.JsonKeyword as Jk
@@ -29,21 +28,22 @@ object UpstreamRequestHandler : KLogging() {
      *  This method currently supports the following upstream types:
      *  - Registering public key for new notification token.
      */
-    fun handleUpstreamRequests(fc: FirebaseClient, pkm: PublicKeyManager, packet: JsonObject) {
+    fun handleUpstreamRequests(mr: MockableRes, packet: JsonObject) {
         // All upstream packets must have to following fields. If null, then log error and return.
         val from = getStringOrNull(packet, Jk.FROM.text, logger) ?: return
         val messageId = getStringOrNull(packet, Jk.MESSAGE_ID.text, logger) ?: return
         val data = getJsonObjectOrNull(packet, Jk.DATA.text, logger) ?: return
         val upstreamType = getStringOrNull(data, Jk.UPSTREAM_TYPE.text, logger) ?: return
 
-        fc.sendAck(from, messageId)
+        mr.fc.sendAck(from, messageId)
 
         // Determine type of upstream packet.
         logger.info("Received an upstream packet of type: $upstreamType")
         when(upstreamType) {
-            Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(fc, data)
-            Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(fc, pkm, data, from, messageId)
-            Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(fc, pkm, data, from, messageId)
+            Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(mr, data)
+            Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(mr, data, from, messageId)
+            Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(mr, data, from, messageId)
+            Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, data, from, messageId)
             else -> logger.warn(
                 "Received an unsupported upstream message type: ${data.getString(Jk.UPSTREAM_TYPE.text)}.")
         }
@@ -70,7 +70,7 @@ object UpstreamRequestHandler : KLogging() {
      *          }
      *      }
      */
-    private fun handleForwardMessageRequest(fc: FirebaseClient, data: JsonObject) {
+    private fun handleForwardMessageRequest(mr: MockableRes, data: JsonObject) {
         val forwardId = getStringOrNull(data, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
         val jsonUpdate = getStringOrNull(data, Jk.JSON_UPDATE.text, logger) ?: return
         val forwardJson = Json.createObjectBuilder()
@@ -80,7 +80,72 @@ object UpstreamRequestHandler : KLogging() {
                 .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
                 .add(Jk.JSON_UPDATE.text, jsonUpdate)
             ).build().toString()
-        fc.sendJson(forwardJson)
+        mr.fc.sendJson(forwardJson)
+    }
+
+    /**
+     *  Handle upstream request to create a new group with members corresponding to the given emails and the user email.
+     *
+     *  @param fc FirebaseXMPPClient reference
+     *  @param fhr FirebaseHTTPRequester reference
+     *  @param data JSON request from client. An example is shown below:
+     *      {
+     *          "upstream_type" : "create_group",
+     *          "group_id": <group-id>
+     *          "member_emails" : "["<user-email-1>", "<user-email-2>"]"
+     *      }
+     *  @param userId notification key of user making request.
+     *  @param requestId id of message containing request.
+     *
+     *  Then the response would indicate success or failure:
+     *      {
+     *          "to" : "<token-to-reply-to>",
+     *          "message_id" : "<some-new-message-id>",
+     *          "data" : {
+     *              "downstream_type": "create_group_response",
+     *              "request_id": "<message-id-of-incoming-request>"
+     *              "failed_emails: []
+     *              "success" : true
+     *          }
+     *      }
+     */
+    private fun handleCreateGroupRequest(mr: MockableRes, data: JsonObject, userId: String, requestId: String) {
+        val groupId = getStringOrNull(data, Jk.GROUP_ID.text, logger) ?: return
+        val memberEmailsString = getStringOrNull(data, Jk.MEMBER_EMAILS.text, logger) ?: return
+        val memberEmails = jsonStringToJsonArray(memberEmailsString)
+
+        // Add the sender to the JsonArray of members.
+        val allMembersBuilder = Json.createArrayBuilder()
+        val failedEmails = Json.createArrayBuilder()// assumes all emails sent to firebase are successfully added.
+        for (peerEmail in memberEmails) {
+            val peerEmailString = peerEmail.toString().removeSurrounding("\"")
+            logger.info("Handling peerEmailString=$peerEmailString")
+            val peerToken = mr.pkm.getNotificationKey(peerEmailString)
+            if (peerToken == null)
+                failedEmails.add(peerEmailString)
+            else
+                allMembersBuilder.add(peerToken)
+        }
+        val allMembers = allMembersBuilder.add(userId).build()
+
+        // Crate a new group and return result.
+        logger.info("Calling maybeCreateGroup with groupId=$groupId and regIds=$allMembers")
+        val groupKey = mr.gm.maybeCreateGroup(groupId, allMembers)
+        if (groupKey == null) {
+            sendRequestOutcomeResponse(mr, Jk.CREATE_GROUP_RESPONSE.text, userId, requestId, false)
+        } else {
+            mr.gm.registerGroup(groupId, groupKey)
+            val responseJson = Json.createObjectBuilder()
+                .add(Jk.TO.text, userId)
+                .add(Jk.MESSAGE_ID.text, getUniqueId())
+                .add(Jk.DATA.text, Json.createObjectBuilder()
+                    .add(Jk.DOWNSTREAM_TYPE.text, Jk.CREATE_GROUP_RESPONSE.text)
+                    .add(Jk.REQUEST_ID.text, requestId)
+                    .add(Jk.SUCCESS.text, true)
+                    .add(Jk.FAILED_EMAILS.text, failedEmails.build())
+                ).build().toString()
+            mr.fc.sendJson(responseJson)
+        }
     }
 
     /**
@@ -108,10 +173,9 @@ object UpstreamRequestHandler : KLogging() {
      *          }
      *      }
      */
-    private fun handleGetNotificationKeyRequest(
-        fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
+    private fun handleGetNotificationKeyRequest(mr: MockableRes, data: JsonObject, userId: String, requestId: String) {
         val userEmail = getStringOrNull(data, Jk.EMAIL.text, logger) ?: return
-        val notificationKey = pkm.getNotificationKey(userEmail)
+        val notificationKey = mr.pkm.getNotificationKey(userEmail)
         logger.info("Sending notification key for $userEmail to $userId")
 
         if (notificationKey == null) {
@@ -123,7 +187,7 @@ object UpstreamRequestHandler : KLogging() {
                     .add(Jk.SUCCESS.text, false)
                     .add(Jk.REQUEST_ID.text, requestId)
                 ).build().toString()
-            fc.sendJson(responseJson)
+            mr.fc.sendJson(responseJson)
         } else {
             val responseJson = Json.createObjectBuilder()
                 .add(Jk.TO.text, userId)
@@ -134,7 +198,7 @@ object UpstreamRequestHandler : KLogging() {
                     .add(Jk.NOTIFICATION_KEY.text, notificationKey)
                     .add(Jk.REQUEST_ID.text, requestId)
                 ).build().toString()
-            fc.sendJson(responseJson)
+            mr.fc.sendJson(responseJson)
         }
     }
 
@@ -154,14 +218,13 @@ object UpstreamRequestHandler : KLogging() {
      *
      *  Note that the notification key is given by the "from" entry in the packet (not data part).
      */
-    private fun handleRegisterPublicKeyRequest(
-        fc: FirebaseClient, pkm: PublicKeyManager, data: JsonObject, userId: String, requestId: String) {
+    private fun handleRegisterPublicKeyRequest(mr: MockableRes, data: JsonObject, userId: String, requestId: String) {
         val email = data.getString(Jk.EMAIL.text)
         val publicKey = data.getString(Jk.PUBLIC_KEY.text)
         logger.info("Registering $email with notification key $userId and public key $publicKey")
 
-        val outcome = pkm.maybeAddPublicKey(email, userId, publicKey)
-        sendRequestOutcomeResponse(fc, userId, requestId, outcome)
+        val outcome = mr.pkm.maybeAddPublicKey(email, userId, publicKey)
+        sendRequestOutcomeResponse(mr, Jk.REGISTER_PUBLIC_KEY_RESPONSE.text, userId, requestId, outcome)
     }
 
     /**
@@ -178,16 +241,16 @@ object UpstreamRequestHandler : KLogging() {
      *
      */
     private fun sendRequestOutcomeResponse(
-        fc: FirebaseClient, userId: String, requestId: String, outcome: Boolean) {
+        mr: MockableRes, downstreamType: String, userId: String, requestId: String, outcome: Boolean) {
         val responseJson = Json.createObjectBuilder()
             .add(Jk.TO.text, userId)
             .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
-                .add(Jk.DOWNSTREAM_TYPE.text, Jk.REGISTER_PUBLIC_KEY_RESPONSE.text)
+                .add(Jk.DOWNSTREAM_TYPE.text, downstreamType)
                 .add(Jk.REQUEST_ID.text, requestId)
                 .add(Jk.SUCCESS.text, outcome)
             ).build().toString()
-        fc.sendJson(responseJson)
+        mr.fc.sendJson(responseJson)
     }
 
 }

@@ -4,6 +4,7 @@ import mu.KLogger
 import java.io.StringReader
 import java.util.*
 import javax.json.Json
+import javax.json.JsonArray
 import javax.json.JsonObject
 
 enum class JsonKeyword(val text: String) {
@@ -19,17 +20,29 @@ enum class JsonKeyword(val text: String) {
     REGISTER_PUBLIC_KEY("register_public_key"), PUBLIC_KEY("public_key"), EMAIL("email"),
     FORWARD_MESSAGE("forward_message"), FORWARD_TOKEN_ID("forward_token_id"), JSON_UPDATE("json_update"),
     GET_NOTIFICATION_KEY("get_notification_key"), NOTIFICATION_KEY("notification_key"),
+    CREATE_GROUP("create_group"), GROUP_ID("group_id"), MEMBER_EMAILS("member_emails"),
 
     // Downstream Packets
     TO("to"), DOWNSTREAM_TYPE("downstream_type"), REQUEST_ID("request_id"), SUCCESS("success"),
     GET_NOTIFICATION_KEY_RESPONSE("get_notification_key_response"),
-    REGISTER_PUBLIC_KEY_RESPONSE("register_public_key_response")
+    REGISTER_PUBLIC_KEY_RESPONSE("register_public_key_response"),
+    CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"),
+
+    // Firebase Request Packets
+    CONTENT_TYPE("Content-Type"), APPLICATION_JSON("application/json"),
+    AUTHORISATION("Authorization"), PROJECT_ID("project_id"), POST("POST"),
+    OPERATION("operation"), CREATE("create"), NOTIFICATION_KEY_NAME("notification_key_name"),
+    REGISTRATION_IDS("registration_ids")
 
 }
 
-fun jsonStringToJson(jsonString: String): JsonObject = Json.createReader(StringReader(jsonString)).readObject()
+fun jsonStringToJsonObject(jsonString: String): JsonObject = Json.createReader(StringReader(jsonString)).readObject()
+
+fun jsonStringToJsonArray(jsonString: String): JsonArray = Json.createReader(StringReader(jsonString)).readArray()
 
 fun getUniqueId(): String = UUID.randomUUID().toString()
+
+//fun removeSurroundingQuotes(string: String) = string.replace("^\"", "").replace("\"\$", "")
 
 fun getStringOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): String? {
     val field = jsonObject.getString(fieldName, null)
@@ -39,7 +52,14 @@ fun getStringOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger):
 }
 
 fun getJsonObjectOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): JsonObject? {
-    val field = jsonObject.getJsonObject(JsonKeyword.DATA.text)
+    val field = jsonObject.getJsonObject(fieldName)
+    if (field == null)
+        logger.error("Missing field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString())}")
+    return field
+}
+
+fun getJsonArrayOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): JsonArray? {
+    val field = jsonObject.getJsonArray(fieldName)
     if (field == null)
         logger.error("Missing field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString())}")
     return field
