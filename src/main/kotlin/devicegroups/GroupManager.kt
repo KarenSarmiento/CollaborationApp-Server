@@ -23,7 +23,7 @@ object GroupManager : KLogging() {
      *  @param groupId id of created group.
      *  @param registrationIds array of ids to be added to the group.
      *
-     *  @return The group key correspondind to the created group.
+     *  @return The group key corresponding to the created group.
      */
     fun maybeCreateGroup(groupId: String, registrationIds: JsonArray): String? {
         // Configure HTTP Connection

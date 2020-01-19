@@ -104,6 +104,8 @@ object UpstreamRequestHandler : KLogging() {
      *          "data" : {
      *              "downstream_type": "create_group_response",
      *              "request_id": "<message-id-of-incoming-request>"
+     *              "group_name": "<human-readable-group-name>"
+     *              "group_id": "<unique-group-id>"
      *              "failed_emails: []
      *              "success" : true
      *          }
@@ -112,6 +114,7 @@ object UpstreamRequestHandler : KLogging() {
     private fun handleCreateGroupRequest(mr: MockableRes, data: JsonObject, userId: String, requestId: String) {
         val groupId = getStringOrNull(data, Jk.GROUP_ID.text, logger) ?: return
         val memberEmailsString = getStringOrNull(data, Jk.MEMBER_EMAILS.text, logger) ?: return
+        val groupName = getStringOrNull(data, Jk.GROUP_NAME.text, logger) ?: groupId
         val memberEmails = jsonStringToJsonArray(memberEmailsString)
 
         // Add the sender to the JsonArray of members.
@@ -139,15 +142,17 @@ object UpstreamRequestHandler : KLogging() {
                 .add(Jk.DATA.text, Json.createObjectBuilder()
                     .add(Jk.DOWNSTREAM_TYPE.text, Jk.CREATE_GROUP_RESPONSE.text)
                     .add(Jk.REQUEST_ID.text, requestId)
+                    .add(Jk.GROUP_NAME.text, groupName)
+                    .add(Jk.GROUP_ID.text, groupId)
                     .add(Jk.SUCCESS.text, true)
                     .add(Jk.FAILED_EMAILS.text, failedEmails.build())
                 ).build().toString()
             mr.fc.sendJson(responseJson)
 
-            allMembers.dropLast(1) // requesting user already received response above.
             for (rawPeerToken in allMembers) {
                 val peerToken = rawPeerToken.toString().removeSurrounding("\"")
-                sendAddedToGroupMesasage(mr, peerToken, groupId)
+                if (peerToken != userId)
+                    sendAddedToGroupMesasage(mr, peerToken, groupName, groupId)
             }
         }
     }
@@ -156,6 +161,7 @@ object UpstreamRequestHandler : KLogging() {
      *  Notify client that they have been added to a group.
      *
      *  @param to notification token for client to be notified.
+     *  @param groupName a non-unique human-readable string used to identify the group.
      *  @param groupId id of the group that they have been added to.
      *
      *  An example message is shown below:
@@ -165,15 +171,17 @@ object UpstreamRequestHandler : KLogging() {
      *          "data" : {
      *              "downstream_type": "added_to_group",
      *              "group_id": "<group-id>"
+     *              "group_name": "<group-name>"
      *          }
      *      }
      */
-    private fun sendAddedToGroupMesasage(mr: MockableRes, to: String, groupId: String) {
+    private fun sendAddedToGroupMesasage(mr: MockableRes, to: String, groupName: String, groupId: String) {
         val responseJson = Json.createObjectBuilder()
             .add(Jk.TO.text, to)
             .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_TO_GROUP.text)
+                .add(Jk.GROUP_NAME.text, groupName)
                 .add(Jk.GROUP_ID.text, groupId)
             ).build().toString()
         mr.fc.sendJson(responseJson)

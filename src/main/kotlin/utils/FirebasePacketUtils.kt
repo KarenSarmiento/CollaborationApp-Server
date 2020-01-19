@@ -27,7 +27,7 @@ enum class JsonKeyword(val text: String) {
     GET_NOTIFICATION_KEY_RESPONSE("get_notification_key_response"),
     REGISTER_PUBLIC_KEY_RESPONSE("register_public_key_response"),
     CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"),
-    ADDED_TO_GROUP("added_to_group"),
+    ADDED_TO_GROUP("added_to_group"), GROUP_NAME("group_name"),
 
     // Firebase Request Packets
     CONTENT_TYPE("Content-Type"), APPLICATION_JSON("application/json"),
@@ -42,8 +42,6 @@ fun jsonStringToJsonObject(jsonString: String): JsonObject = Json.createReader(S
 fun jsonStringToJsonArray(jsonString: String): JsonArray = Json.createReader(StringReader(jsonString)).readArray()
 
 fun getUniqueId(): String = UUID.randomUUID().toString()
-
-//fun removeSurroundingQuotes(string: String) = string.replace("^\"", "").replace("\"\$", "")
 
 fun getStringOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): String? {
     val field = jsonObject.getString(fieldName, null)
