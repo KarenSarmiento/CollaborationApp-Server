@@ -8,7 +8,6 @@ import utils.JsonKeyword as Jk
 import utils.jsonStringToJsonObject
 import utils.removeWhitespacesAndNewlines
 import firebaseconnection.FirebaseXMPPClient
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import utils.MockableRes
 import javax.json.Json
@@ -107,7 +106,7 @@ class UpstreamRequestHandlerTest {
         val email1 = "email-1"
         val email2 = "email-2"
         val notKey1 = "not_key-1"
-        val from = "user-1"
+        val from = "user"
         val requestId = "request-123"
         val groupKey = "groupKey-abc123"
 
@@ -137,7 +136,7 @@ class UpstreamRequestHandlerTest {
 
         // THEN
         verify { mrMock.gm.registerGroup(groupId, groupKey) }
-        val expectedJson = removeWhitespacesAndNewlines("""
+        val expectedResponseJson = removeWhitespacesAndNewlines("""
             \{
                 "to": "$from",
                 "message_id": "(.)+",
@@ -149,10 +148,74 @@ class UpstreamRequestHandlerTest {
                 \}
             \}
         """).toRegex()
+        val expectedNotifyJson = removeWhitespacesAndNewlines("""
+            \{
+                "to": "$notKey1",
+                "message_id": "(.)+",
+                "data": \{
+                    "downstream_type": "added_to_group",
+                    "group_id": "$groupId"
+                \}
+            \}
+        """).toRegex()
         verify {
             mrMock.fc.sendJson(any()) // ack
             mrMock.fc.sendJson( match {
-                removeWhitespacesAndNewlines(it) matches expectedJson
+                removeWhitespacesAndNewlines(it) matches expectedResponseJson
+            } )
+            mrMock.fc.sendJson( match {
+                removeWhitespacesAndNewlines(it) matches expectedNotifyJson
+            } )
+        }
+    }
+
+    @Test
+    fun `given create_group upstream request, sends failure message if invalid`() {
+        // GIVEN
+        val groupId = "group-id"
+        val email1 = "email-1"
+        val notKey1 = "not_key-1"
+        val from = "user"
+        val requestId = "request-123"
+
+        every { mrMock.fc.sendJson(any()) } answers {}
+        every { mrMock.fc.sendAck(any(), any()) } answers {}
+        every { mrMock.pkm.getNotificationKey(email1) } returns null
+        every { mrMock.gm.maybeCreateGroup(any(), any()) } returns null
+
+        val upstreamJsonPacket = jsonStringToJsonObject("""
+            {
+                "data": {
+                    "upstream_type": "create_group",
+                    "group_id": "$groupId",
+                    "member_emails": "[\"$email1\"]"
+                },
+                "time_to_live": 1,
+                "from": "$from",
+                "message_id": "$requestId",
+                "category": "test-category"
+            }
+        """.trimIndent())
+
+        // WHEN
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, upstreamJsonPacket)
+
+        // THEN
+        val expectedResponseJson = removeWhitespacesAndNewlines("""
+            \{
+                "to": "$from",
+                "message_id": "(.)+",
+                "data": \{
+                    "downstream_type": "create_group_response",
+                    "request_id": "$requestId",
+                    "success": false
+                \}
+            \}
+        """).toRegex()
+        verify {
+            mrMock.fc.sendJson(any()) // ack
+            mrMock.fc.sendJson( match {
+                removeWhitespacesAndNewlines(it) matches expectedResponseJson
             } )
         }
     }

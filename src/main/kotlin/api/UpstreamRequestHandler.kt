@@ -1,7 +1,6 @@
 package api
 
 import mu.KLogging
-import pki.PublicKeyManager
 import utils.*
 import javax.json.Json
 import javax.json.JsonObject
@@ -71,6 +70,7 @@ object UpstreamRequestHandler : KLogging() {
      *      }
      */
     private fun handleForwardMessageRequest(mr: MockableRes, data: JsonObject) {
+        // TODO: ForwardId would be group id. Remap this to group token.
         val forwardId = getStringOrNull(data, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
         val jsonUpdate = getStringOrNull(data, Jk.JSON_UPDATE.text, logger) ?: return
         val forwardJson = Json.createObjectBuilder()
@@ -143,7 +143,40 @@ object UpstreamRequestHandler : KLogging() {
                     .add(Jk.FAILED_EMAILS.text, failedEmails.build())
                 ).build().toString()
             mr.fc.sendJson(responseJson)
+
+            allMembers.dropLast(1) // requesting user already received response above.
+            for (rawPeerToken in allMembers) {
+                val peerToken = rawPeerToken.toString().removeSurrounding("\"")
+                sendAddedToGroupMesasage(mr, peerToken, groupId)
+            }
         }
+    }
+
+    /**
+     *  Notify client that they have been added to a group.
+     *
+     *  @param to notification token for client to be notified.
+     *  @param groupId id of the group that they have been added to.
+     *
+     *  An example message is shown below:
+     *      {
+     *          "to" : "<token-of-client-added-to-group>",
+     *          "message_id" : "<some-message-id>",
+     *          "data" : {
+     *              "downstream_type": "added_to_group",
+     *              "group_id": "<group-id>"
+     *          }
+     *      }
+     */
+    private fun sendAddedToGroupMesasage(mr: MockableRes, to: String, groupId: String) {
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.TO.text, to)
+            .add(Jk.MESSAGE_ID.text, getUniqueId())
+            .add(Jk.DATA.text, Json.createObjectBuilder()
+                .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_TO_GROUP.text)
+                .add(Jk.GROUP_ID.text, groupId)
+            ).build().toString()
+        mr.fc.sendJson(responseJson)
     }
 
     /**

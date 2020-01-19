@@ -27,6 +27,7 @@ enum class JsonKeyword(val text: String) {
     GET_NOTIFICATION_KEY_RESPONSE("get_notification_key_response"),
     REGISTER_PUBLIC_KEY_RESPONSE("register_public_key_response"),
     CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"),
+    ADDED_TO_GROUP("added_to_group"),
 
     // Firebase Request Packets
     CONTENT_TYPE("Content-Type"), APPLICATION_JSON("application/json"),
