@@ -1,5 +1,6 @@
 package api
 
+import devicegroups.GroupManager
 import mu.KLogging
 import utils.*
 import javax.json.Json
@@ -12,34 +13,34 @@ import utils.JsonKeyword as Jk
 object UpstreamRequestHandler : KLogging() {
 
     /**
-     *  Handles all upstream requests. Upstream packets come in the following form:
-     *  {
-     *      "from": "<user-instance-id>",
-     *      "message_id": "<message-id>",
-     *      "time_to_live": <ttl>,
-     *      "category": "com.karensarmiento.collaborationapp"
-     *      "data": {
-     *          "upstream_type": <upstream-type>,
-     *          <upstream-type-specific fields>
-     *      }
-     *  }
+     *  Handles all upstream requests.
      *
-     *  This method currently supports the following upstream types:
-     *  - Registering public key for new notification token.
+     *  @param mr MockableRes reference.
+     *  @param packet A Json object describing the upstream packet. An example is shown below.
+     *      {
+     *          "from": "<user-instance-id>",
+     *          "message_id": "<message-id>",
+     *          "time_to_live": <ttl>,
+     *          "category": "com.karensarmiento.collaborationapp"
+     *          "data": {
+     *              "upstream_type": <upstream-type>,
+     *              <upstream-type-specific fields>
+     *          }
+     *      }
      */
     fun handleUpstreamRequests(mr: MockableRes, packet: JsonObject) {
         // All upstream packets must have to following fields. If null, then log error and return.
         val from = getStringOrNull(packet, Jk.FROM.text, logger) ?: return
         val messageId = getStringOrNull(packet, Jk.MESSAGE_ID.text, logger) ?: return
+        mr.fc.sendAck(from, messageId)
+
         val data = getJsonObjectOrNull(packet, Jk.DATA.text, logger) ?: return
         val upstreamType = getStringOrNull(data, Jk.UPSTREAM_TYPE.text, logger) ?: return
-
-        mr.fc.sendAck(from, messageId)
 
         // Determine type of upstream packet.
         logger.info("Received an upstream packet of type: $upstreamType")
         when(upstreamType) {
-            Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(mr, data)
+            Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(mr, data, from)
             Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(mr, data, from, messageId)
             Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(mr, data, from, messageId)
             Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, data, from, messageId)
@@ -51,7 +52,7 @@ object UpstreamRequestHandler : KLogging() {
     /**
      *  Handle upstream client request to forward a json update.
      *
-     *  @param fc FirebaseClient reference
+     *  @param mr MockableRes reference
      *  @param data JSON request from client. An example is shown below:
      *      {
      *          "upstream_type" : "forward_message",
@@ -66,19 +67,25 @@ object UpstreamRequestHandler : KLogging() {
      *          "data" : {
      *              "downstream_type": "json_update",
      *              "json_update": "<json-to-be-forwarded>"
+     *              "from": <token-belonging-to-sending-user>
      *          }
      *      }
      */
-    private fun handleForwardMessageRequest(mr: MockableRes, data: JsonObject) {
-        // TODO: ForwardId would be group id. Remap this to group token.
-        val forwardId = getStringOrNull(data, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
+    private fun handleForwardMessageRequest(mr: MockableRes, data: JsonObject, from: String) {
         val jsonUpdate = getStringOrNull(data, Jk.JSON_UPDATE.text, logger) ?: return
+        val groupId = getStringOrNull(data, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
+        val groupToken = mr.gm.getGroupKey(groupId)
+        if (groupToken == null) {
+            logger.error("There exists no group registered with id: $groupId. Will ignore message.")
+            return
+        }
         val forwardJson = Json.createObjectBuilder()
-            .add(Jk.TO.text, forwardId)
+            .add(Jk.TO.text, groupToken)
             .add(Jk.MESSAGE_ID.text, getUniqueId())
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
                 .add(Jk.JSON_UPDATE.text, jsonUpdate)
+                .add(Jk.FROM.text, from)
             ).build().toString()
         mr.fc.sendJson(forwardJson)
     }
@@ -86,8 +93,7 @@ object UpstreamRequestHandler : KLogging() {
     /**
      *  Handle upstream request to create a new group with members corresponding to the given emails and the user email.
      *
-     *  @param fc FirebaseXMPPClient reference
-     *  @param fhr FirebaseHTTPRequester reference
+     *  @param mr MockableRes reference.
      *  @param data JSON request from client. An example is shown below:
      *      {
      *          "upstream_type" : "create_group",
@@ -160,6 +166,7 @@ object UpstreamRequestHandler : KLogging() {
     /**
      *  Notify client that they have been added to a group.
      *
+     *  @param mr MockableRes reference.
      *  @param to notification token for client to be notified.
      *  @param groupName a non-unique human-readable string used to identify the group.
      *  @param groupId id of the group that they have been added to.
@@ -190,8 +197,7 @@ object UpstreamRequestHandler : KLogging() {
     /**
      *  Handle upstream client request to find a users notification key.
      *
-     *  @param fc FirebaseClient reference
-     *  @param pkm PublicKeyManager reference.
+     *  @param mr MockableRes reference.
      *  @param data JSON request from client. An example is shown below:
      *      {
      *          "upstream_type" : "get_notification_key",
@@ -244,8 +250,7 @@ object UpstreamRequestHandler : KLogging() {
     /**
      *  Handle upstream client request to register their public key.
      *
-     *  @param fc FirebaseClient reference
-     *  @param pkm PublicKeyManager reference.
+     *  @param mr MockableRes reference.
      *  @param data JSON request from client. An example is shown below:
      *      {
      *          "upstream_type" : "register_public_key",

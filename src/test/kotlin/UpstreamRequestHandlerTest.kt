@@ -19,6 +19,8 @@ class UpstreamRequestHandlerTest {
 
     @BeforeEach
     fun setUp() {
+
+        // Create mocks for object classes.
         val fcMock = spyk<FirebaseXMPPClient>()
         val gmMock = spyk<GroupManager>()
         val pkmMock = spyk<PublicKeyManager>()
@@ -28,6 +30,10 @@ class UpstreamRequestHandlerTest {
         every { mrMock.gm } answers { gmMock }
         every { mrMock.pkm } answers { pkmMock }
         every { mrMock.urh } answers { urhMock }
+
+        // Prevent attempting to send JSONs or ACKs.
+        every { mrMock.fc.sendJson(any()) } answers {}
+        every { mrMock.fc.sendAck(any(), any()) } answers {}
     }
 
     @Test
@@ -46,7 +52,6 @@ class UpstreamRequestHandlerTest {
                 "category": "test-category"
             }
         """.trimIndent())
-        every { mrMock.fc.sendAck(userFrom, messageId) } answers {}
 
         // WHEN
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, upstreamJsonPacket)
@@ -58,19 +63,22 @@ class UpstreamRequestHandlerTest {
     @Test
     fun `upstream requests of type forward_message are forwarded correctly`() {
         // GIVEN
-        every { mrMock.fc.sendJson(any()) } answers {}
-        every { mrMock.fc.sendAck(any(), any()) } answers {}
-        val deviceGroupToken = "device-group-abc"
+        val deviceGroupId = "device-group-id"
+        val deviceGroupToken = "device-group-token"
         val jsonUpdate = "test-update-json"
+        val from = "user-1"
+
+        every { mrMock.gm.getGroupKey(deviceGroupId) } returns deviceGroupToken
+
         val upstreamJsonPacket = jsonStringToJsonObject("""
             {
                 "data": {
                     "upstream_type": "forward_message",
-                    "forward_token_id": "$deviceGroupToken",
+                    "forward_token_id": "$deviceGroupId",
                     "json_update": "$jsonUpdate"
                 },
                 "time_to_live": 1,
-                "from": "user-1",
+                "from": "$from",
                 "message_id": "123",
                 "category": "test-category"
             }
@@ -86,13 +94,14 @@ class UpstreamRequestHandlerTest {
                 "message_id": "(.)+",
                 "data": \{
                     "downstream_type": "json_update",
-                    "json_update": "$jsonUpdate"
+                    "json_update": "$jsonUpdate",
+                    "from": "$from"
                 \}
             \}
         """).toRegex()
 
         verify {
-            mrMock.fc.sendJson(any()) // ack
+//            mrMock.fc.sendJson(any()) // ack
             mrMock.fc.sendJson( match {
                 removeWhitespacesAndNewlines(it) matches expectedJson
             } )
@@ -103,6 +112,7 @@ class UpstreamRequestHandlerTest {
     fun `given create_group upstream request, sends success message if valid`() {
         // GIVEN
         val groupId = "group-id"
+        val groupName = "group-name"
         val email1 = "email-1"
         val email2 = "email-2"
         val notKey1 = "not_key-1"
@@ -110,8 +120,6 @@ class UpstreamRequestHandlerTest {
         val requestId = "request-123"
         val groupKey = "groupKey-abc123"
 
-        every { mrMock.fc.sendJson(any()) } answers {}
-        every { mrMock.fc.sendAck(any(), any()) } answers {}
         every { mrMock.pkm.getNotificationKey(email1) } returns notKey1
         every { mrMock.pkm.getNotificationKey(email2) } returns null
         every { mrMock.gm.maybeCreateGroup(any(), any()) } returns groupKey
@@ -121,6 +129,7 @@ class UpstreamRequestHandlerTest {
             {
                 "data": {
                     "upstream_type": "create_group",
+                    "group_name": "$groupName",
                     "group_id": "$groupId",
                     "member_emails": "[\"$email1\", \"$email2\"]"
                 },
@@ -143,6 +152,8 @@ class UpstreamRequestHandlerTest {
                 "data": \{
                     "downstream_type": "create_group_response",
                     "request_id": "$requestId",
+                    "group_name": "$groupName",
+                    "group_id": "$groupId",
                     "success": true,
                     "failed_emails": \["$email2"\]
                 \}
@@ -154,12 +165,12 @@ class UpstreamRequestHandlerTest {
                 "message_id": "(.)+",
                 "data": \{
                     "downstream_type": "added_to_group",
+                    "group_name": "$groupName",
                     "group_id": "$groupId"
                 \}
             \}
         """).toRegex()
         verify {
-            mrMock.fc.sendJson(any()) // ack
             mrMock.fc.sendJson( match {
                 removeWhitespacesAndNewlines(it) matches expectedResponseJson
             } )
@@ -178,8 +189,6 @@ class UpstreamRequestHandlerTest {
         val from = "user"
         val requestId = "request-123"
 
-        every { mrMock.fc.sendJson(any()) } answers {}
-        every { mrMock.fc.sendAck(any(), any()) } answers {}
         every { mrMock.pkm.getNotificationKey(email1) } returns null
         every { mrMock.gm.maybeCreateGroup(any(), any()) } returns null
 
@@ -213,7 +222,6 @@ class UpstreamRequestHandlerTest {
             \}
         """).toRegex()
         verify {
-            mrMock.fc.sendJson(any()) // ack
             mrMock.fc.sendJson( match {
                 removeWhitespacesAndNewlines(it) matches expectedResponseJson
             } )
@@ -228,8 +236,6 @@ class UpstreamRequestHandlerTest {
         val from = "user-1"
         val requestId = "request-123"
 
-        every { mrMock.fc.sendJson(any()) } answers {}
-        every { mrMock.fc.sendAck(any(), any()) } answers {}
         every { mrMock.pkm.getNotificationKey(userEmail) } answers { notificationKey }
 
         val upstreamJsonPacket = jsonStringToJsonObject("""
@@ -263,7 +269,6 @@ class UpstreamRequestHandlerTest {
         """).toRegex()
 
         verify {
-            mrMock.fc.sendJson(any()) // ack
             mrMock.fc.sendJson( match {
                 removeWhitespacesAndNewlines(it) matches expectedJson
             } )
@@ -277,8 +282,6 @@ class UpstreamRequestHandlerTest {
         val from = "user-1"
         val requestId = "request-123"
 
-        every { mrMock.fc.sendJson(any()) } answers {}
-        every { mrMock.fc.sendAck(any(), any()) } answers {}
         every { mrMock.pkm.getNotificationKey(userEmail) } answers { null }
 
         val upstreamJsonPacket = jsonStringToJsonObject("""
@@ -311,7 +314,6 @@ class UpstreamRequestHandlerTest {
         """).toRegex()
 
         verify {
-            mrMock.fc.sendJson(any()) // ack
             mrMock.fc.sendJson( match {
                 removeWhitespacesAndNewlines(it) matches expectedJson
             } )
@@ -330,8 +332,6 @@ class UpstreamRequestHandlerTest {
 
     private fun testRegistrationOfPublicKey(pkmRegistrationSuccess: Boolean) {
         // GIVEN
-        every { mrMock.fc.sendJson(any()) } answers {}
-        every { mrMock.fc.sendAck(any(), any()) } answers {}
         every { mrMock.pkm.maybeAddPublicKey(any(), any(), any()) } answers { pkmRegistrationSuccess }
         val from = "user-abc"
         val messageId = "123"
@@ -366,7 +366,6 @@ class UpstreamRequestHandlerTest {
             \}
         """).toRegex()
         verify {
-            mrMock.fc.sendJson(any()) // ack
             mrMock.fc.sendJson( match {
                 removeWhitespacesAndNewlines(it) matches expectedJson
             } )

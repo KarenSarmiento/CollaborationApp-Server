@@ -17,9 +17,10 @@ import org.jivesoftware.smack.StanzaListener
 import org.jivesoftware.smack.filter.StanzaTypeFilter
 import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.StandardExtensionElement
-import pki.PublicKeyManager
 import utils.*
 import javax.json.Json
+import kotlinx.coroutines.*
+
 
 /**
  *  Handles XMPP-level connection between self and Firebase.
@@ -59,7 +60,7 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
         ReconnectionManager.getInstanceFor(xmppConn).addReconnectionListener(this)
 
         // Disable Roster (contact list). This will be managed directly with Firebase.
-        Roster.getInstanceFor(xmppConn).isRosterLoadedAtLogin = false
+//        Roster.getInstanceFor(xmppConn).isRosterLoadedAtLogin = false
 
         // FCM requires a SASL PLAIN authentication mechanism.
         SASLAuthentication.unBlacklistSASLMechanism("PLAIN")
@@ -80,10 +81,15 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
     }
 
     override fun processStanza(packet: Stanza) {
-        processStanzaTestable(MockableRes, packet)
+        runBlocking {
+            launch {
+                processStanzaTestable(MockableRes, packet)
+            }
+        }
     }
 
     fun processStanzaTestable(mr: MockableRes, packet: Stanza) {
+        logger.info("Processing Stanza in thread: ${Thread.currentThread().name} ${Thread.currentThread().id}")
         val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
         val extendedPacketJson = jsonStringToJsonObject(extendedPacket.text)
 
