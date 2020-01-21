@@ -26,6 +26,7 @@ enum class JsonKeyword(val text: String) {
     TO("to"), DOWNSTREAM_TYPE("downstream_type"), REQUEST_ID("request_id"), SUCCESS("success"),
     GET_NOTIFICATION_KEY_RESPONSE("get_notification_key_response"),
     REGISTER_PUBLIC_KEY_RESPONSE("register_public_key_response"),
+    ORIGINATOR("originator"),
     CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"),
     ADDED_TO_GROUP("added_to_group"), GROUP_NAME("group_name"),
 

@@ -85,7 +85,7 @@ object UpstreamRequestHandler : KLogging() {
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
                 .add(Jk.JSON_UPDATE.text, jsonUpdate)
-                .add(Jk.FROM.text, from)
+                .add(Jk.ORIGINATOR.text, from)
             ).build().toString()
         mr.fc.sendJson(forwardJson)
     }

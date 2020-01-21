@@ -95,7 +95,7 @@ class UpstreamRequestHandlerTest {
                 "data": \{
                     "downstream_type": "json_update",
                     "json_update": "$jsonUpdate",
-                    "from": "$from"
+                    "originator": "$from"
                 \}
             \}
         """).toRegex()
@@ -185,7 +185,6 @@ class UpstreamRequestHandlerTest {
         // GIVEN
         val groupId = "group-id"
         val email1 = "email-1"
-        val notKey1 = "not_key-1"
         val from = "user"
         val requestId = "request-123"
 

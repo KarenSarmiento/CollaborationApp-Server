@@ -20,6 +20,7 @@ import org.jivesoftware.smack.packet.StandardExtensionElement
 import utils.*
 import javax.json.Json
 import kotlinx.coroutines.*
+import javax.json.JsonObject
 
 
 /**
@@ -95,10 +96,14 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
 
         when(extendedPacketJson.getString(Jk.MESSAGE_TYPE.text, null)) {
             Jk.ACK.text -> logger.warn("ACK receipt not yet supported.")
-            Jk.NACK.text -> logger.warn("NACK receipt not yet supported.")
+            Jk.NACK.text -> handleNack(extendedPacketJson)
             Jk.CONTROL.text -> logger.warn("Control message receipt not yet supported.")
             else -> mr.urh.handleUpstreamRequests(mr, extendedPacketJson) // upstream has unspecified message type.
         }
+    }
+
+    private fun handleNack(packet: JsonObject) {
+        logger.warn("Received NACK is: ${prettyFormatJSON(packet.toString())}")
     }
 
     fun sendAck(from: String, messageId: String) {
