@@ -116,7 +116,7 @@ object EncryptionManager {
         val keyFac = KeyFactory.getInstance("RSA")
         // Convert the public key string into X509EncodedKeySpec format.
         val keySpec = X509EncodedKeySpec(
-            Base64.getDecoder().decode(publicKey.toByteArray() //TODO: Check for surrounding spaces
+            Base64.getDecoder().decode(publicKey.toByteArray()
             ) // key as bit string
         )
         // Create Android PublicKey object from X509EncodedKeySpec object.
@@ -127,7 +127,7 @@ object EncryptionManager {
         val keyFac = KeyFactory.getInstance("RSA")
         // Convert the public key string into PKCS8EncodedKeySpec format.
         val keySpec = PKCS8EncodedKeySpec(
-            Base64.getDecoder().decode(privateKey) //TODO: Check for surrounding spaces
+            Base64.getDecoder().decode(privateKey)
         )
         // Create Android PrivateKey object from PKCS8EncodedKeySpec object.
         return keyFac.generatePrivate(keySpec)
