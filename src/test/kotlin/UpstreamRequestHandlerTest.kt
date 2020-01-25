@@ -101,7 +101,6 @@ class UpstreamRequestHandlerTest {
         """).toRegex()
 
         verify {
-//            mrMock.fc.sendJson(any()) // ack
             mrMock.fc.sendJson( match {
                 removeWhitespacesAndNewlines(it) matches expectedJson
             } )
