@@ -9,8 +9,10 @@ import utils.jsonStringToJsonObject
 import utils.removeWhitespacesAndNewlines
 import firebaseconnection.FirebaseXMPPClient
 import org.junit.jupiter.api.BeforeEach
+import pki.EncryptionManager
 import utils.MockableRes
 import javax.json.Json
+import javax.json.JsonObject
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class UpstreamRequestHandlerTest {
@@ -19,17 +21,18 @@ class UpstreamRequestHandlerTest {
 
     @BeforeEach
     fun setUp() {
-
         // Create mocks for object classes.
         val fcMock = spyk<FirebaseXMPPClient>()
         val gmMock = spyk<GroupManager>()
         val pkmMock = spyk<PublicKeyManager>()
-        val urhMock = spyk<UpstreamRequestHandler>()
+        val urhMock = spyk<UpstreamRequestHandler>(recordPrivateCalls = true)
+        val emMock = spyk<EncryptionManager>()
         mrMock = spyk()
         every { mrMock.fc } answers { fcMock }
         every { mrMock.gm } answers { gmMock }
         every { mrMock.pkm } answers { pkmMock }
         every { mrMock.urh } answers { urhMock }
+        every { mrMock.em } answers { emMock }
 
         // Prevent attempting to send JSONs or ACKs.
         every { mrMock.fc.sendJson(any()) } answers {}
@@ -52,6 +55,7 @@ class UpstreamRequestHandlerTest {
                 "category": "test-category"
             }
         """.trimIndent())
+        disableDataDecryption()
 
         // WHEN
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, upstreamJsonPacket)
@@ -62,21 +66,43 @@ class UpstreamRequestHandlerTest {
 
     @Test
     fun `upstream requests of type forward_message are forwarded correctly`() {
-        // GIVEN
         val deviceGroupId = "device-group-id"
-        val deviceGroupToken = "device-group-token"
         val jsonUpdate = "test-update-json"
+        val dataJson = """
+            {
+                "upstream_type": "forward_message",
+                "forward_token_id": "$deviceGroupId",
+                "json_update": "$jsonUpdate"
+            }
+        """.trimIndent()
+        testForwardUpdateMessage(dataJson, false, deviceGroupId, jsonUpdate)
+    }
+
+    @Test
+    fun `given an encrypted forward update request, the message is succesfully decrypted and forwarded`() {
+        val deviceGroupId = "device-group-id"
+        val jsonUpdate = "test-update-json"
+        val dataJson = """
+            {
+                "enc_key": "gZqTQwNPsQ/0FhOuiatA/NbsAZAxEo8wJU0S7if/X6jKotlfDH+RVLFO4kRWytxHxURACwkJJaWZKTmbeomhdMDE9NgO15Tfw+bBLSSjfLdg+o85xlz52nzfLi7zK6FrmUT2nbHi1ZG8kuKySjA01rpOPTb46O2Aroqb1lgBvKn9CeqVe/Dg1zGvD3D4B6YzX0IjFsKW2S3mRNZdsUy93F639FJWDrmCJ121YgJc5SGRaDL5gKRfGTT5FAOdtulA9xd8taJ3QlhkRqyCpdIAHjKWGLFkRjcTcrMJQgsMSVILcvlPRcYCOt3KPtvV8QU9AJyuNCEzsCAEfNhLN4wGTA==",
+                "enc_message": "XxJHoxl46pyI9msVHUAGuv3bNDGRmLsG90c6Ed4kuQ7nwjVmd0iHbcpRiFZJmpfsVr0oNZCAcUwv\nfH7h8hQJnHv4e64+F5HFPTN174prMKv7wtXHumzZkJhAcxvCHvLweL1K3ZSUNZdTomMhkZRs5iXl\nlAWADUzL2pCfGuuqygp4YPr6kG4PlFefdElIVMtR6Z9oIURdYt3XSSHIC46CIzrweU8="
+            }
+        """.trimIndent()
+        testForwardUpdateMessage(dataJson, true, deviceGroupId, jsonUpdate)
+    }
+
+    private fun testForwardUpdateMessage(
+        dataJson: String, encrypted: Boolean, deviceGroupId: String, jsonUpdate: String) {
+        // GIVEN
+        val deviceGroupToken = "device-group-token"
         val from = "user-1"
 
         every { mrMock.gm.getGroupKey(deviceGroupId) } returns deviceGroupToken
+        if (!encrypted) { disableDataDecryption() }
 
         val upstreamJsonPacket = jsonStringToJsonObject("""
             {
-                "data": {
-                    "upstream_type": "forward_message",
-                    "forward_token_id": "$deviceGroupId",
-                    "json_update": "$jsonUpdate"
-                },
+                "data": $dataJson,
                 "time_to_live": 1,
                 "from": "$from",
                 "message_id": "123",
@@ -138,6 +164,7 @@ class UpstreamRequestHandlerTest {
                 "category": "test-category"
             }
         """.trimIndent())
+        disableDataDecryption()
 
         // WHEN
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, upstreamJsonPacket)
@@ -203,6 +230,7 @@ class UpstreamRequestHandlerTest {
                 "category": "test-category"
             }
         """.trimIndent())
+        disableDataDecryption()
 
         // WHEN
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, upstreamJsonPacket)
@@ -248,6 +276,7 @@ class UpstreamRequestHandlerTest {
                 "category": "test-category"
             }
         """.trimIndent())
+        disableDataDecryption()
 
         // WHEN
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, upstreamJsonPacket)
@@ -294,6 +323,7 @@ class UpstreamRequestHandlerTest {
                 "category": "test-category"
             }
         """.trimIndent())
+        disableDataDecryption()
 
         // WHEN
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, upstreamJsonPacket)
@@ -347,6 +377,7 @@ class UpstreamRequestHandlerTest {
                 .add(Jk.EMAIL.text, email)
                 .add(Jk.PUBLIC_KEY.text, publicKey)
             ).build()
+        disableDataDecryption()
 
         // WHEN
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, requestJson)
@@ -369,4 +400,15 @@ class UpstreamRequestHandlerTest {
             } )
         }
     }
+
+    /**
+     * If we do not want to encrypt input data in our tests, then just disable all decrypting and make
+     * data field contain unencrypted data, isntead of "enc_message" and "enc_key" fields.
+     */
+    private fun disableDataDecryption() {
+        every { mrMock.urh["getDecryptedMessage"](any<MockableRes>(), any<JsonObject>()) } answers {
+            it.invocation.args[1] as JsonObject?
+        }
+    }
+
 }

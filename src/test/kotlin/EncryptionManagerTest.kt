@@ -6,6 +6,20 @@ import pki.EncryptionManager
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class EncryptionManagerTest {
+
+    @Test
+    fun conversionBetweenStringAndSecretKeyIsSuccessful() {
+        // GIVEN
+        val secretKey = EncryptionManager.generateKeyAESGCM()
+
+        // WHEN
+        val secretKeyString = EncryptionManager.keyAsString(secretKey)
+        val secretKeyRecovered = EncryptionManager.stringToKeyAESGCM(secretKeyString)
+
+        // THEN
+        assertEquals(secretKey, secretKeyRecovered)
+    }
+
     @Test
     fun encryptingPlaintextOutputsNonEqualCiphertextAES_GCM() {
         // GIVEN

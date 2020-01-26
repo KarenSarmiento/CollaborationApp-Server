@@ -11,6 +11,7 @@ enum class JsonKeyword(val text: String) {
     // All Packets
     DATA("data"), TIME_TO_LIVE("time_to_live"), FROM("from"),
     MESSAGE_ID("message_id"), MESSAGE_TYPE("message_type"), CATEGORY("category"),
+    ENC_MESSAGE("enc_message"), ENC_KEY("enc_key"),
 
     // Packet Types
     ACK("ack"), NACK("nack"), CONTROL("control"),
