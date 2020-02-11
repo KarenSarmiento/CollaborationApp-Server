@@ -96,7 +96,7 @@ class UpstreamRequestHandlerTest {
         every { mrMock.pkm.getNotificationKey(email1) } returns notKey1
         every { mrMock.pkm.getNotificationKey(email2) } returns null
         every { mrMock.gm.maybeCreateGroup(any(), any()) } returns groupKey
-        every { mrMock.gm.registerGroup(any(), any()) } answers {}
+        every { mrMock.gm.registerGroup(any(), any(), any()) } answers {}
 
         val message = Json.createObjectBuilder()
             .add(Jk.UPSTREAM_TYPE.text, Jk.CREATE_GROUP.text)
@@ -111,7 +111,7 @@ class UpstreamRequestHandlerTest {
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
 
         // THEN
-        verify { mrMock.gm.registerGroup(groupId, groupKey) }
+        verify { mrMock.gm.registerGroup(groupId, groupKey, mutableSetOf(email1)) }
         val expectedResponseJson = Json.createObjectBuilder()
             .add(Jk.DOWNSTREAM_TYPE.text, Jk.CREATE_GROUP_RESPONSE.text)
             .add(Jk.REQUEST_ID.text, messageId)

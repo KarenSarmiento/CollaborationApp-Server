@@ -129,7 +129,7 @@ object UpstreamRequestHandler : KLogging() {
         if (groupKey == null) {
             sendRequestOutcomeResponse(mr, Jk.CREATE_GROUP_RESPONSE.text, userToken, userEmail, requestId, false)
         } else {
-            mr.gm.registerGroup(groupId, groupKey)
+            mr.gm.registerGroup(groupId, groupKey, users.registered.keys)
             // Notify requesting user of success.
             sendSuccessfulCreateGroupResponse(mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered)
 
