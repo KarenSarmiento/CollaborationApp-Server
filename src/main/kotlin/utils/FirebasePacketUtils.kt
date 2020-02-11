@@ -39,6 +39,8 @@ enum class JsonKeyword(val text: String) {
 
 }
 
+data class Users(val registered: MutableMap<String, String>, val unregistered: JsonArray)
+
 fun jsonStringToJsonObject(jsonString: String): JsonObject = Json.createReader(StringReader(jsonString)).readObject()
 
 fun jsonStringToJsonArray(jsonString: String): JsonArray = Json.createReader(StringReader(jsonString)).readArray()

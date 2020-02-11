@@ -3,6 +3,7 @@ package api
 import mu.KLogging
 import utils.*
 import javax.json.Json
+import javax.json.JsonArray
 import javax.json.JsonObject
 import utils.JsonKeyword as Jk
 
@@ -15,7 +16,7 @@ object UpstreamRequestHandler : KLogging() {
      *  Handles all upstream requests.
      *
      *  @param mr MockableRes reference.
-     *  @param packet A Json object describing the upstream packet. An example is shown below.
+     *  @param message A Json object describing the upstream packet. An example is shown below.
      *      {
      *          "from": "<user-instance-id>",
      *          "message_id": "<message-id>",
@@ -32,46 +33,27 @@ object UpstreamRequestHandler : KLogging() {
      *           "upstream_type": <upstream-type>,
      *           <upstream-type-specific fields>
      *      }
+     *
+     *  @param from User token of requesting device.
+     *  @param email Email of requesting user.
+     *  @param messageId Message Id of the request.
      */
-    fun handleUpstreamRequests(mr: MockableRes, packet: JsonObject) {
-        // All upstream packets must have to following fields. If null, then log error and return.
-        val from = getStringOrNull(packet, Jk.FROM.text, logger) ?: return
-        val messageId = getStringOrNull(packet, Jk.MESSAGE_ID.text, logger) ?: return
+    fun handleUpstreamRequests(mr: MockableRes, message: JsonObject, from: String, email: String, messageId: String) {
+        // All upstream messages must be ACKed.
         mr.fc.sendAck(from, messageId)
 
-        // Decrypt data to find request json.
-        val data = getJsonObjectOrNull(packet, Jk.DATA.text, logger) ?: return
-        val message = mr.urh.getDecryptedMessage(mr, data) ?: return
+        // Determine type of upstream packet.
         val upstreamType = getStringOrNull(message, Jk.UPSTREAM_TYPE.text, logger) ?: return
 
-        // Determine type of upstream packet.
         logger.info("Received an upstream packet of type: $upstreamType")
         when(upstreamType) {
             Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(mr, message, from)
-            Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(mr, message, from, messageId)
-            Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(mr, message, from, messageId)
-            Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, message, from, messageId)
+            Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(mr, message, from, email, messageId)
+            Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(mr, message, from, email, messageId)
+            Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, message, from, email, messageId)
             else -> logger.warn(
                 "Received an unsupported upstream message type: $upstreamType.")
         }
-    }
-
-    /**
-     *  Decrypts data part of received packet and returns JSON object.
-     */
-    private fun getDecryptedMessage(mr: MockableRes, data: JsonObject): JsonObject? {
-        logger.warn("ACTUAL GETDECRYPTEDMESSAGE WAS CALLED!!")
-        // Get encrypted AES key and data.
-        var encryptedKey = getStringOrNull(data, Jk.ENC_KEY.text, logger) ?: return null
-        val encryptedMessage = getStringOrNull(data, Jk.ENC_MESSAGE.text, logger) ?: return null
-
-        // Decrypt AES key and obtain SecretKey object.
-        val decryptedKey = mr.em.maybeDecryptRSA(encryptedKey, mr.em.PRIVATE_KEY) ?: return null
-        val secretKey = mr.em.stringToKeyAESGCM(decryptedKey)
-
-        // Decrypt Message and return as JSON object.
-        val decryptedMessage = mr.em.decryptAESGCM(encryptedMessage, secretKey)
-        return jsonStringToJsonObject(decryptedMessage)
     }
 
     /**
@@ -99,40 +81,28 @@ object UpstreamRequestHandler : KLogging() {
     private fun handleForwardMessageRequest(mr: MockableRes, request: JsonObject, from: String) {
         val jsonUpdate = getStringOrNull(request, Jk.JSON_UPDATE.text, logger) ?: return
         val groupId = getStringOrNull(request, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
-        val groupToken = mr.gm.getGroupKey(groupId)
-        if (groupToken == null) {
-            logger.error("There exists no group registered with id: $groupId. Will ignore message.")
-            return
-        }
-        val forwardJson = Json.createObjectBuilder()
-            .add(Jk.TO.text, groupToken)
-            .add(Jk.MESSAGE_ID.text, getUniqueId())
-            .add(Jk.DATA.text, Json.createObjectBuilder()
-                .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
-                .add(Jk.JSON_UPDATE.text, jsonUpdate)
-                .add(Jk.ORIGINATOR.text, from)
-            ).build().toString()
-        mr.fc.sendJson(forwardJson)
+        mr.emh.sendEncryptedGroupMessage(mr, groupId, jsonUpdate, getUniqueId(), from)
     }
 
     /**
-     *  Handle upstream request to create a new group with members corresponding to the given emails and the user email.
+     *  Handle upstream request to create a new group with members corresponding to the given emails and the user userEmail.
      *
      *  @param mr MockableRes reference.
      *  @param request JSON request from client. An example is shown below:
      *      {
      *          "upstream_type" : "create_group",
      *          "group_id": <group-id>
-     *          "member_emails" : "["<user-email-1>", "<user-email-2>"]"
+     *          "member_emails" : "["<user-userEmail-1>", "<user-userEmail-2>"]"
      *      }
-     *  @param userId notification key of user making request.
+     *  @param userToken notification key of user making request.
+     *  @param userEmail email of user making request.
      *  @param requestId id of message containing request.
      *
      *  Then the response would indicate success or failure:
      *      {
      *          "to" : "<token-to-reply-to>",
      *          "message_id" : "<some-new-message-id>",
-     *          "request" : {
+     *          "data" [ENCRYPTED]: {
      *              "downstream_type": "create_group_response",
      *              "request_id": "<message-id-of-incoming-request>"
      *              "group_name": "<human-readable-group-name>"
@@ -142,81 +112,103 @@ object UpstreamRequestHandler : KLogging() {
      *          }
      *      }
      */
-    private fun handleCreateGroupRequest(mr: MockableRes, request: JsonObject, userId: String, requestId: String) {
+    private fun handleCreateGroupRequest(
+        mr: MockableRes, request: JsonObject, userToken: String, userEmail: String, requestId: String) {
+        // Get request information.
         val groupId = getStringOrNull(request, Jk.GROUP_ID.text, logger) ?: return
         val memberEmailsString = getStringOrNull(request, Jk.MEMBER_EMAILS.text, logger) ?: return
+        val memberEmails =  jsonStringToJsonArray(memberEmailsString)
         val groupName = getStringOrNull(request, Jk.GROUP_NAME.text, logger) ?: groupId
-        val memberEmails = jsonStringToJsonArray(memberEmailsString)
 
-        // Add the sender to the JsonArray of members.
-        val allMembersBuilder = Json.createArrayBuilder()
-        val failedEmails = Json.createArrayBuilder()// assumes all emails sent to firebase are successfully added.
-        for (peerEmail in memberEmails) {
-            val peerEmailString = peerEmail.toString().removeSurrounding("\"")
-            val peerToken = mr.pkm.getNotificationKey(peerEmailString)
-            if (peerToken == null)
-                failedEmails.add(peerEmailString)
-            else
-                allMembersBuilder.add(peerToken)
-        }
-        val allMembers = allMembersBuilder.add(userId).build()
+        // Request to create new group.
+        val users = getTokensForRegisteredUsers(mr, memberEmails)
+        val memberTokens = getTokensAsJsonArray(users.registered, userToken)
+        val groupKey = mr.gm.maybeCreateGroup(groupId, memberTokens)
 
-        // Crate a new group and return result.
-        val groupKey = mr.gm.maybeCreateGroup(groupId, allMembers)
+        // Handle result and send responses.
         if (groupKey == null) {
-            sendRequestOutcomeResponse(mr, Jk.CREATE_GROUP_RESPONSE.text, userId, requestId, false)
+            sendRequestOutcomeResponse(mr, Jk.CREATE_GROUP_RESPONSE.text, userToken, userEmail, requestId, false)
         } else {
             mr.gm.registerGroup(groupId, groupKey)
-            val responseJson = Json.createObjectBuilder()
-                .add(Jk.TO.text, userId)
-                .add(Jk.MESSAGE_ID.text, getUniqueId())
-                .add(Jk.DATA.text, Json.createObjectBuilder()
-                    .add(Jk.DOWNSTREAM_TYPE.text, Jk.CREATE_GROUP_RESPONSE.text)
-                    .add(Jk.REQUEST_ID.text, requestId)
-                    .add(Jk.GROUP_NAME.text, groupName)
-                    .add(Jk.GROUP_ID.text, groupId)
-                    .add(Jk.SUCCESS.text, true)
-                    .add(Jk.FAILED_EMAILS.text, failedEmails.build())
-                ).build().toString()
-            mr.fc.sendJson(responseJson)
+            // Notify requesting user of success.
+            sendSuccessfulCreateGroupResponse(mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered)
 
-            for (rawPeerToken in allMembers) {
-                val peerToken = rawPeerToken.toString().removeSurrounding("\"")
-                if (peerToken != userId)
-                    sendAddedToGroupMesasage(mr, peerToken, groupName, groupId)
+            // Notify added users that they have been added to a group.
+            for ((email, token) in users.registered) {
+                sendAddedToGroupMessage(mr, token, groupName, groupId, email)
             }
         }
+    }
+
+    /**
+     *  Identify which users are registered or not registered. Obtain token if they are registered.
+     */
+    private fun getTokensForRegisteredUsers(mr: MockableRes, userEmails: JsonArray): Users {
+        // Maps registered user emails to their tokens.
+        val registeredUsers = mutableMapOf<String, String>()
+        // Create a JSON array containing all the unregistered emails.
+        val unregisteredUsers = Json.createArrayBuilder()
+
+        for (email in userEmails) {
+            val emailString = email.toString().removeSurrounding("\"")
+            val token = mr.pkm.getNotificationKey(emailString)
+            if (token == null)
+                unregisteredUsers.add(emailString)
+            else
+                registeredUsers[emailString] = token
+        }
+        return Users(registeredUsers, unregisteredUsers.build())
+    }
+
+    private fun getTokensAsJsonArray(emailsToTokens: MutableMap<String, String>, requesterToken: String): JsonArray {
+        val tokens = Json.createArrayBuilder()
+        for ((_, token) in emailsToTokens) {
+            tokens.add(token)
+        }
+        return tokens.add(requesterToken).build()
+    }
+
+    /**
+     *  Send successful create group response.
+     */
+    private fun sendSuccessfulCreateGroupResponse(
+        mr: MockableRes, userId: String, userEmail: String, requestId: String, groupName: String, groupId: String, failedEmails: JsonArray) {
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.CREATE_GROUP_RESPONSE.text)
+            .add(Jk.REQUEST_ID.text, requestId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.FAILED_EMAILS.text, failedEmails)
+            .build().toString()
+
+        val messageId = getUniqueId()
+        mr.emh.sendEncryptedResponseJson(mr, responseJson, userId, userEmail, messageId)
+
+        logger.info("Sent successful group created response to $userEmail.")
     }
 
     /**
      *  Notify client that they have been added to a group.
      *
      *  @param mr MockableRes reference.
-     *  @param to notification token for client to be notified.
+     *  @param to notification token belonging to user to be notified.
      *  @param groupName a non-unique human-readable string used to identify the group.
      *  @param groupId id of the group that they have been added to.
+     *  @param email email belonging to the user who is receiving the response.
      *
-     *  An example message is shown below:
-     *      {
-     *          "to" : "<token-of-client-added-to-group>",
-     *          "message_id" : "<some-message-id>",
-     *          "data" : {
-     *              "downstream_type": "added_to_group",
-     *              "group_id": "<group-id>"
-     *              "group_name": "<group-name>"
-     *          }
-     *      }
      */
-    private fun sendAddedToGroupMesasage(mr: MockableRes, to: String, groupName: String, groupId: String) {
+    private fun sendAddedToGroupMessage(mr: MockableRes, to: String, groupName: String, groupId: String, email: String) {
         val responseJson = Json.createObjectBuilder()
-            .add(Jk.TO.text, to)
-            .add(Jk.MESSAGE_ID.text, getUniqueId())
-            .add(Jk.DATA.text, Json.createObjectBuilder()
-                .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_TO_GROUP.text)
-                .add(Jk.GROUP_NAME.text, groupName)
-                .add(Jk.GROUP_ID.text, groupId)
-            ).build().toString()
-        mr.fc.sendJson(responseJson)
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_TO_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .build().toString()
+
+        val messageId = getUniqueId()
+        mr.emh.sendEncryptedResponseJson(mr, responseJson, to, email, messageId)
+
+        logger.info("Notified peer $email that they have been added to group $groupName.")
     }
 
     /**
@@ -228,7 +220,8 @@ object UpstreamRequestHandler : KLogging() {
      *          "upstream_type" : "get_notification_key",
      *          "email" : "<user-email>"
      *      }
-     *  @param userId notification key of user making request.
+     *  @param userToken notification key of user making request.
+     *  @param userEmail email of user making request.
      *  @param requestId id of message containing request.
      *
      *  The response would then be:
@@ -243,33 +236,40 @@ object UpstreamRequestHandler : KLogging() {
      *          }
      *      }
      */
-    private fun handleGetNotificationKeyRequest(mr: MockableRes, request: JsonObject, userId: String, requestId: String) {
-        val userEmail = getStringOrNull(request, Jk.EMAIL.text, logger) ?: return
-        val notificationKey = mr.pkm.getNotificationKey(userEmail)
-        logger.info("Sending notification key for $userEmail to $userId")
+    private fun handleGetNotificationKeyRequest(
+        mr: MockableRes, request: JsonObject, userToken: String, userEmail: String, requestId: String) {
+        // Get notification key.
+        val requestedEmail = getStringOrNull(request, Jk.EMAIL.text, logger) ?: return
+        val notificationKey = mr.pkm.getNotificationKey(requestedEmail)
 
+        // Send response.
+        sendNotificationKeyResponse(mr, userToken, userEmail, requestId, notificationKey)
+    }
+
+    /**
+     *  Send response to notification key request.
+     *
+     *  Success is implied by the notificationKey field: null implies the request was unsuccessful.
+     */
+    private fun sendNotificationKeyResponse(
+        mr: MockableRes, userToken: String, userEmail: String, requestId: String, notificationKey: String? = null) {
+        // Create response .
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.GET_NOTIFICATION_KEY_RESPONSE.text)
+            .add(Jk.REQUEST_ID.text, requestId)
+
+        // All successful responses must include a notification key in the packet.
         if (notificationKey == null) {
-            val responseJson = Json.createObjectBuilder()
-                .add(Jk.TO.text, userId)
-                .add(Jk.MESSAGE_ID.text, getUniqueId())
-                .add(Jk.DATA.text, Json.createObjectBuilder()
-                    .add(Jk.DOWNSTREAM_TYPE.text, Jk.GET_NOTIFICATION_KEY_RESPONSE.text)
-                    .add(Jk.SUCCESS.text, false)
-                    .add(Jk.REQUEST_ID.text, requestId)
-                ).build().toString()
-            mr.fc.sendJson(responseJson)
+            responseJson.add(Jk.SUCCESS.text, false)
         } else {
-            val responseJson = Json.createObjectBuilder()
-                .add(Jk.TO.text, userId)
-                .add(Jk.MESSAGE_ID.text, getUniqueId())
-                .add(Jk.DATA.text, Json.createObjectBuilder()
-                    .add(Jk.DOWNSTREAM_TYPE.text, Jk.GET_NOTIFICATION_KEY_RESPONSE.text)
-                    .add(Jk.SUCCESS.text, true)
-                    .add(Jk.NOTIFICATION_KEY.text, notificationKey)
-                    .add(Jk.REQUEST_ID.text, requestId)
-                ).build().toString()
-            mr.fc.sendJson(responseJson)
+            responseJson.add(Jk.SUCCESS.text, true)
+            responseJson.add(Jk.NOTIFICATION_KEY.text, notificationKey)
         }
+
+        // Send encrypted response.
+        val responseString = responseJson.build().toString()
+        val messageId = getUniqueId()
+        mr.emh.sendEncryptedResponseJson(mr, responseString, userToken, userEmail, messageId)
     }
 
     /**
@@ -283,17 +283,19 @@ object UpstreamRequestHandler : KLogging() {
      *          "public_key" : "<public-key>"
      *      }
      *  @param userId name of user requesting to register their public key.
+     *  @param userEmail email of user making request.
      *  @param requestId requestId of request.
      *
      *  Note that the notification key is given by the "from" entry in the packet (not request part).
      */
-    private fun handleRegisterPublicKeyRequest(mr: MockableRes, request: JsonObject, userId: String, requestId: String) {
+    private fun handleRegisterPublicKeyRequest(
+        mr: MockableRes, request: JsonObject, userId: String, userEmail: String, requestId: String) {
         val email = getStringOrNull(request, Jk.EMAIL.text, logger) ?: return
         val publicKey = getStringOrNull(request, Jk.PUBLIC_KEY.text, logger) ?: return
         logger.info("Registering $email with notification key $userId and public key $publicKey")
 
         val outcome = mr.pkm.maybeAddPublicKey(email, userId, publicKey)
-        sendRequestOutcomeResponse(mr, Jk.REGISTER_PUBLIC_KEY_RESPONSE.text, userId, requestId, outcome)
+        sendRequestOutcomeResponse(mr, Jk.REGISTER_PUBLIC_KEY_RESPONSE.text, userId, userEmail, requestId, outcome)
     }
 
     /**
@@ -310,16 +312,15 @@ object UpstreamRequestHandler : KLogging() {
      *
      */
     private fun sendRequestOutcomeResponse(
-        mr: MockableRes, downstreamType: String, userId: String, requestId: String, outcome: Boolean) {
+        mr: MockableRes, downstreamType: String, userToken: String, userEmail: String, requestId: String, outcome: Boolean) {
         val responseJson = Json.createObjectBuilder()
-            .add(Jk.TO.text, userId)
-            .add(Jk.MESSAGE_ID.text, getUniqueId())
-            .add(Jk.DATA.text, Json.createObjectBuilder()
-                .add(Jk.DOWNSTREAM_TYPE.text, downstreamType)
-                .add(Jk.REQUEST_ID.text, requestId)
-                .add(Jk.SUCCESS.text, outcome)
-            ).build().toString()
-        mr.fc.sendJson(responseJson)
+            .add(Jk.DOWNSTREAM_TYPE.text, downstreamType)
+            .add(Jk.REQUEST_ID.text, requestId)
+            .add(Jk.SUCCESS.text, outcome)
+            .build().toString()
+
+        val messageId = getUniqueId()
+        mr.emh.sendEncryptedResponseJson(mr, responseJson, userToken, userEmail, messageId)
     }
 
 }

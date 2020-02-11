@@ -1,11 +1,9 @@
 package firebaseconnection
 
-import api.UpstreamRequestHandler
 import utils.JsonKeyword as Jk
 import mu.KLogging
 import org.jivesoftware.smack.*
 import org.jivesoftware.smack.packet.Stanza
-import org.jivesoftware.smack.roster.Roster
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration
 import java.security.SecureRandom
@@ -98,7 +96,7 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
             Jk.ACK.text -> logger.warn("ACK receipt not yet supported.")
             Jk.NACK.text -> handleNack(extendedPacketJson)
             Jk.CONTROL.text -> logger.warn("Control message receipt not yet supported.")
-            else -> mr.urh.handleUpstreamRequests(mr, extendedPacketJson) // upstream has unspecified message type.
+            else -> mr.emh.handleEncryptedMessage(mr, extendedPacketJson) // upstream has unspecified message type.
         }
     }
 

@@ -1,4 +1,6 @@
+import api.EncryptedMessageHandler
 import api.UpstreamRequestHandler
+import devicegroups.GroupManager
 import io.mockk.*
 import org.jivesoftware.smack.packet.Stanza
 import org.jivesoftware.smack.util.PacketParserUtils
@@ -6,6 +8,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import firebaseconnection.FirebaseXMPPClient
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import pki.EncryptionManager
+import pki.PublicKeyManager
 import utils.MockableRes
 import utils.jsonStringToJsonObject
 import utils.removeWhitespacesAndNewlines
@@ -15,6 +20,29 @@ import javax.json.Json
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class FirebaseXMPPClientTest {
+
+    private lateinit var mrMock: MockableRes
+
+    @BeforeEach
+    fun setUp() {
+        // Create mocks for object classes.
+        val fcMock = spyk<FirebaseXMPPClient>()
+        val gmMock = spyk<GroupManager>()
+        val pkmMock = spyk<PublicKeyManager>()
+        val urhMock = spyk<UpstreamRequestHandler>()
+        val emMock = spyk<EncryptionManager>()
+        val emhMock = spyk<EncryptedMessageHandler>()
+        mrMock = spyk()
+        every { mrMock.fc } answers { fcMock }
+        every { mrMock.gm } answers { gmMock }
+        every { mrMock.pkm } answers { pkmMock }
+        every { mrMock.urh } answers { urhMock }
+        every { mrMock.em } answers { emMock }
+        every { mrMock.emh } answers { emhMock }
+
+        // Prevent actually handling upstream encrypted messages.
+        every { mrMock.emh.handleEncryptedMessage(any(), any()) } answers {}
+    }
 
     @Test
     fun `processStanza detects and handles arbitrary upstream packets (no message type)`() {
@@ -35,17 +63,11 @@ class FirebaseXMPPClientTest {
                 </gcm>
             </message>
         """.trimIndent().replace("\n", "").replace("\\s+".toRegex(), " ")
-        val fcMock = spyk<FirebaseXMPPClient>()
-        val urhMock = spyk<UpstreamRequestHandler>()
-        every { urhMock.handleUpstreamRequests(any(), any()) } answers {}
-        val mrMock = spyk<MockableRes>()
-        every { mrMock.fc } answers { fcMock }
-        every { mrMock.urh } answers { urhMock }
 
         val testStanza = PacketParserUtils.parseStanza<Stanza>(xmlString)
 
         // WHEN
-        fcMock.processStanzaTestable(mrMock, testStanza)
+        mrMock.fc.processStanzaTestable(mrMock, testStanza)
 
         // THEN
         val dataJson = jsonStringToJsonObject(dataJsonString)
@@ -55,7 +77,7 @@ class FirebaseXMPPClientTest {
             .add(Jk.FROM.text, userFrom)
             .add(Jk.MESSAGE_ID.text, messageId)
             .build()
-        verify {urhMock.handleUpstreamRequests(mrMock, expectedRequestJson)}
+        verify { mrMock.emh.handleEncryptedMessage(mrMock, expectedRequestJson)}
     }
 
     // TODO: Test cases such as invalid user id or message id
