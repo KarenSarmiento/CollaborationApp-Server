@@ -84,6 +84,35 @@ class UpstreamRequestHandlerTest {
     }
 
     @Test
+    fun `forward_to_peer request messages are correctly forwarded`() {
+        // GIVEN
+        val peerEmail = "peer-email"
+        val peerMessage = "{hello there peer :)}"
+        val peerToken = "peer-token"
+
+        every { mrMock.pkm.getNotificationKey(peerEmail) } answers { peerToken }
+
+        val message = Json.createObjectBuilder()
+            .add(Jk.UPSTREAM_TYPE.text, Jk.FORWARD_TO_PEER.text)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .add(Jk.PEER_MESSAGE.text, peerMessage)
+            .build()
+
+        // WHEN
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
+
+        // THEN
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.FORWARD_TO_PEER.text)
+            .add(Jk.PEER_MESSAGE.text, peerMessage)
+            .build().toString()
+
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, responseJson, peerToken, peerEmail, any())
+        }
+    }
+
+    @Test
     fun `given create_group upstream request, sends success message if valid`() {
         // GIVEN
         val userPublicKey = "user-public-key"

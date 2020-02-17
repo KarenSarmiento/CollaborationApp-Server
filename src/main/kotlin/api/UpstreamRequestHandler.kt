@@ -49,9 +49,37 @@ object UpstreamRequestHandler : KLogging() {
             Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(mr, message, from, email, messageId)
             Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(mr, message, from, email, messageId)
             Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, message, from, email, messageId)
+            Jk.FORWARD_TO_PEER.text -> handleForwardToPeerRequest(mr, message)
             else -> logger.warn(
                 "Received an unsupported upstream message type: $upstreamType.")
         }
+    }
+
+    /**
+     *  Handle upstream client request to forward message to a peer.
+     *
+     *  @param mr MockableRes reference.
+     *  @param request JSON request from client. An example is shown below:
+     *      {
+     *          "upstream_type": "forward_to_peer",
+     *          "peer_email": "<peer-email>",
+     *          "peer_message": "<encrypted-peer-message>"
+     *      }
+     */
+    private fun handleForwardToPeerRequest(mr: MockableRes, request: JsonObject) {
+        val peerEmail = getStringOrNull(request, Jk.PEER_EMAIL.text, logger) ?: return
+        val peerMessage = getStringOrNull(request, Jk.PEER_MESSAGE.text, logger) ?: return
+        val peerToken = mr.pkm.getNotificationKey(peerEmail) ?: return
+
+        // Construct forward message.
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.FORWARD_TO_PEER.text)
+            .add(Jk.PEER_MESSAGE.text, peerMessage)
+            .build().toString()
+
+        val messageId = getUniqueId()
+        mr.emh.sendEncryptedResponseJson(mr, responseJson, peerToken, peerEmail, messageId)
+        logger.info("Forwarded message to $peerEmail")
     }
 
     /**
