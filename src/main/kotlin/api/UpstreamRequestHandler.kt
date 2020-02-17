@@ -2,9 +2,7 @@ package api
 
 import mu.KLogging
 import utils.*
-import javax.json.Json
-import javax.json.JsonArray
-import javax.json.JsonObject
+import javax.json.*
 import utils.JsonKeyword as Jk
 
 /**
@@ -121,49 +119,72 @@ object UpstreamRequestHandler : KLogging() {
         val groupName = getStringOrNull(request, Jk.GROUP_NAME.text, logger) ?: groupId
 
         // Request to create new group.
-        val users = getTokensForRegisteredUsers(mr, memberEmails)
+        val users = getTokensAndKeysForRegisteredUsers(mr, memberEmails)
         val memberTokens = getTokensAsJsonArray(users.registered, userToken)
         val groupKey = mr.gm.maybeCreateGroup(groupId, memberTokens)
+        val members = createMembersJsonArray(mr, users.registered, userEmail, userToken)
 
         // Handle result and send responses.
-        if (groupKey == null) {
+        if (groupKey == null || members == null) {
             sendRequestOutcomeResponse(mr, Jk.CREATE_GROUP_RESPONSE.text, userToken, userEmail, requestId, false)
         } else {
             mr.gm.registerGroup(groupId, groupKey, users.registered.keys)
+
             // Notify requesting user of success.
-            sendSuccessfulCreateGroupResponse(mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered)
+            sendSuccessfulCreateGroupResponse(mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered, members)
 
             // Notify added users that they have been added to a group.
-            for ((email, token) in users.registered) {
-                sendAddedToGroupMessage(mr, token, groupName, groupId, email)
+            for ((email, user) in users.registered) {
+                sendAddedToGroupMessage(mr, user.token, groupName, groupId, email, members)
             }
         }
+    }
+
+    private fun createMembersJsonArray(mr: MockableRes, successfulUsers: Map<String, UserContact>, requesterEmail: String, requesterToken: String): JsonArray? {
+        val addedUsers = Json.createArrayBuilder()
+
+        // Add requesting user to group if they are registered.
+        val requesterPublicKey = mr.pkm.getPublicKey(requesterEmail) ?: return null
+        addedUsers.add(Json.createObjectBuilder()
+            .add(Jk.EMAIL.text, requesterEmail)
+            .add(Jk.PUBLIC_KEY.text, requesterPublicKey)
+            .add(Jk.NOTIFICATION_KEY.text, requesterToken))
+
+        // Add all other members.
+        for ((email, user) in successfulUsers) {
+            addedUsers.add(Json.createObjectBuilder()
+                .add(Jk.EMAIL.text, email)
+                .add(Jk.PUBLIC_KEY.text, user.publicKey)
+                .add(Jk.NOTIFICATION_KEY.text, user.token))
+        }
+        return addedUsers.build()
     }
 
     /**
      *  Identify which users are registered or not registered. Obtain token if they are registered.
      */
-    private fun getTokensForRegisteredUsers(mr: MockableRes, userEmails: JsonArray): Users {
+    private fun getTokensAndKeysForRegisteredUsers(mr: MockableRes, userEmails: JsonArray): Users {
         // Maps registered user emails to their tokens.
-        val registeredUsers = mutableMapOf<String, String>()
+        val registeredUsers = mutableMapOf<String, UserContact>()
         // Create a JSON array containing all the unregistered emails.
         val unregisteredUsers = Json.createArrayBuilder()
 
         for (email in userEmails) {
             val emailString = email.toString().removeSurrounding("\"")
             val token = mr.pkm.getNotificationKey(emailString)
-            if (token == null)
+            val publicKey = mr.pkm.getPublicKey(emailString)
+            if (token == null || publicKey == null)
                 unregisteredUsers.add(emailString)
             else
-                registeredUsers[emailString] = token
+                registeredUsers[emailString] = UserContact(token, publicKey)
         }
         return Users(registeredUsers, unregisteredUsers.build())
     }
 
-    private fun getTokensAsJsonArray(emailsToTokens: MutableMap<String, String>, requesterToken: String): JsonArray {
+    private fun getTokensAsJsonArray(emailsToTokens: MutableMap<String, UserContact>, requesterToken: String): JsonArray {
         val tokens = Json.createArrayBuilder()
-        for ((_, token) in emailsToTokens) {
-            tokens.add(token)
+        for ((_, user) in emailsToTokens) {
+            tokens.add(user.token)
         }
         return tokens.add(requesterToken).build()
     }
@@ -172,7 +193,8 @@ object UpstreamRequestHandler : KLogging() {
      *  Send successful create group response.
      */
     private fun sendSuccessfulCreateGroupResponse(
-        mr: MockableRes, userId: String, userEmail: String, requestId: String, groupName: String, groupId: String, failedEmails: JsonArray) {
+        mr: MockableRes, userId: String, userEmail: String, requestId: String, groupName: String, groupId: String,
+        failedEmails: JsonArray, successfulUsers: JsonArray) {
         val responseJson = Json.createObjectBuilder()
             .add(Jk.DOWNSTREAM_TYPE.text, Jk.CREATE_GROUP_RESPONSE.text)
             .add(Jk.REQUEST_ID.text, requestId)
@@ -180,12 +202,13 @@ object UpstreamRequestHandler : KLogging() {
             .add(Jk.GROUP_ID.text, groupId)
             .add(Jk.SUCCESS.text, true)
             .add(Jk.FAILED_EMAILS.text, failedEmails)
+            .add(Jk.MEMBERS.text, successfulUsers)
             .build().toString()
 
         val messageId = getUniqueId()
         mr.emh.sendEncryptedResponseJson(mr, responseJson, userId, userEmail, messageId)
 
-        logger.info("Sent successful group created response to $userEmail.")
+        logger.info("Sent successful group created response to $userEmail: ${prettyFormatJSON(responseJson)}")
     }
 
     /**
@@ -198,17 +221,21 @@ object UpstreamRequestHandler : KLogging() {
      *  @param email email belonging to the user who is receiving the response.
      *
      */
-    private fun sendAddedToGroupMessage(mr: MockableRes, to: String, groupName: String, groupId: String, email: String) {
+    private fun sendAddedToGroupMessage(
+        mr: MockableRes, to: String, groupName: String, groupId: String, email: String, successfulUsers: JsonArray) {
         val responseJson = Json.createObjectBuilder()
             .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_TO_GROUP.text)
             .add(Jk.GROUP_NAME.text, groupName)
             .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.MEMBERS.text, successfulUsers)
             .build().toString()
 
         val messageId = getUniqueId()
         mr.emh.sendEncryptedResponseJson(mr, responseJson, to, email, messageId)
 
-        logger.info("Notified peer $email that they have been added to group $groupName.")
+        logger.info("Notified peer $email that they have been added to group $groupName: " +
+                prettyFormatJSON(responseJson)
+        )
     }
 
     /**

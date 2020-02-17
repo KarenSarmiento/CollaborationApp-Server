@@ -106,6 +106,7 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
 
     fun sendAck(from: String, messageId: String) {
         // TODO: Exponential backoff in case of connection failure?
+        logger.info("Sent ack to $from.")
         val ackJson = createAckJson(from, messageId)
         sendJson(ackJson)
     }
@@ -119,7 +120,6 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
     }
 
     fun sendJson(json: String) {
-        logger.info("Sending json: ${prettyFormatJSON(json)}")
         // TODO: Exponential Backoff -> must you also apply this to ACKs?
         val message = FcmPacketExtension(json).toPacket()
         sendStanza(message)

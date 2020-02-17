@@ -28,7 +28,7 @@ enum class JsonKeyword(val text: String) {
     GET_NOTIFICATION_KEY_RESPONSE("get_notification_key_response"),
     REGISTER_PUBLIC_KEY_RESPONSE("register_public_key_response"),
     ORIGINATOR("originator"),
-    CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"),
+    CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"), MEMBERS("members"),
     ADDED_TO_GROUP("added_to_group"), GROUP_NAME("group_name"),
 
     // Firebase Request Packets
@@ -39,7 +39,8 @@ enum class JsonKeyword(val text: String) {
 
 }
 
-data class Users(val registered: MutableMap<String, String>, val unregistered: JsonArray)
+data class UserContact(val token: String, val publicKey: String)
+data class Users(val registered: MutableMap<String, UserContact>, val unregistered: JsonArray)
 
 fun jsonStringToJsonObject(jsonString: String): JsonObject = Json.createReader(StringReader(jsonString)).readObject()
 
