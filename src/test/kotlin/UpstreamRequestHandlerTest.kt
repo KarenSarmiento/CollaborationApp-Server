@@ -198,8 +198,6 @@ class UpstreamRequestHandlerTest {
         val groupId = "group-id"
         val groupName = "group-name"
         val email1 = "email-1"
-        val from = "user"
-        val requestId = "request-123"
 
         every { mrMock.pkm.getPublicKey(userEmail) } returns userPublicKey
         every { mrMock.pkm.getPublicKey(email1) } returns publicKey1

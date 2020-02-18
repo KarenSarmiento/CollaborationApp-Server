@@ -1,5 +1,4 @@
 import devicegroups.GroupManager
-import io.mockk.spyk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -18,16 +17,16 @@ class GroupManagerTest {
     fun `groups are correctly registered and can be queried thereafter for keys and members`() {
         // GIVEN
         val groupId = "group-id"
-        val groupKey = "group-key"
+        val firebaseId = "firebase-id"
         val groupMembers = mutableSetOf<String>("m1", "m2", "m3")
-        GroupManager.registerGroup(groupId, groupKey, groupMembers)
+        GroupManager.registerGroup(groupId, firebaseId, groupMembers)
 
         // WHEN
-        val groupKeyActual = GroupManager.getGroupKey(groupId)
+        val firebaseIdActual = GroupManager.getFirebaseId(groupId)
         val membersActual = GroupManager.getGroupMembers(groupId)
 
         // THEN
-        assertEquals(groupKey, groupKeyActual)
+        assertEquals(firebaseId, firebaseIdActual)
         assertEquals(groupMembers.toSet(), membersActual)
     }
 
@@ -35,20 +34,20 @@ class GroupManagerTest {
     fun `groups that are registered twice are correctly updated`() {
         // GIVEN
         val groupId = "group-id"
-        val groupKey1 = "group-key-1"
+        val firebaseId1 = "firebase-id-1"
         val groupMembers1 = mutableSetOf<String>("m1", "m2", "m3")
-        GroupManager.registerGroup(groupId, groupKey1, groupMembers1)
+        GroupManager.registerGroup(groupId, firebaseId1, groupMembers1)
 
-        val groupKey2 = "group-key-2"
+        val firebaseId2 = "firebase-id-2"
         val groupMembers2 = mutableSetOf<String>("n1", "n2", "n3")
-        GroupManager.registerGroup(groupId, groupKey2, groupMembers2)
+        GroupManager.registerGroup(groupId, firebaseId2, groupMembers2)
 
         // WHEN
-        val groupKeyActual = GroupManager.getGroupKey(groupId)
+        val firebaseIdActual = GroupManager.getFirebaseId(groupId)
         val membersActual = GroupManager.getGroupMembers(groupId)
 
         // THEN
-        assertEquals(groupKey1, groupKeyActual)
+        assertEquals(firebaseId1, firebaseIdActual)
         assertEquals(groupMembers1.toSet(), membersActual)
     }
 }

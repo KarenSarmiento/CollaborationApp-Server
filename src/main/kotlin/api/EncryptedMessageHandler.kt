@@ -47,7 +47,7 @@ object EncryptedMessageHandler : KLogging() {
      *  Send encrypted group message using symmetric group key.
      */
     fun sendEncryptedGroupMessage(mr: MockableRes, groupId: String, jsonUpdate: String, messageId: String, from: String) {
-        val groupToken = mr.gm.getGroupKey(groupId)
+        val groupToken = mr.gm.getFirebaseId(groupId)
         if (groupToken == null) {
             logger.error("There exists no group registered with id: $groupId. Will ignore message.")
             return
@@ -59,8 +59,9 @@ object EncryptedMessageHandler : KLogging() {
                 .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
                 .add(Jk.JSON_UPDATE.text, jsonUpdate)
                 .add(Jk.ORIGINATOR.text, from)
+                .add(Jk.GROUP_ID.text, groupId)
             ).build().toString()
-        // TODO: ADD ENCRYPTION.
+        // TODO: sendEncryptedGROUPJson instead - group key version
         mr.fc.sendJson(forwardJson)
     }
 
