@@ -45,7 +45,7 @@ class UpstreamRequestHandlerTest {
         // Prevent attempting to send JSONs or ACKs.
         every { mrMock.fc.sendJson(any()) } answers {}
         every { mrMock.emh.sendEncryptedResponseJson(any(), any(), any(), any(), any()) } answers {}
-        every { mrMock.emh.sendEncryptedGroupMessage(any(), any(), any(), any(), any()) } answers {}
+        every { mrMock.emh.sendEncryptedGroupMessage(any(), any(), any(), any()) } answers {}
         every { mrMock.fc.sendAck(any(), any()) } answers {}
     }
 
@@ -69,9 +69,9 @@ class UpstreamRequestHandlerTest {
         val deviceGroupId = "device-group-id"
         val jsonUpdate = "{test-update-json}"
         val message = Json.createObjectBuilder()
-            .add(Jk.UPSTREAM_TYPE.text, Jk.FORWARD_MESSAGE.text)
-            .add(Jk.FORWARD_TOKEN_ID.text, deviceGroupId)
-            .add(Jk.JSON_UPDATE.text, jsonUpdate)
+            .add(Jk.UPSTREAM_TYPE.text, Jk.FORWARD_TO_GROUP.text)
+            .add(Jk.GROUP_ID.text, deviceGroupId)
+            .add(Jk.GROUP_MESSAGE.text, jsonUpdate)
             .build()
 
         // WHEN
@@ -79,7 +79,7 @@ class UpstreamRequestHandlerTest {
 
         // THEN
         verify {
-            mrMock.emh.sendEncryptedGroupMessage(mrMock, deviceGroupId, jsonUpdate, any(), userFrom)
+            mrMock.emh.sendEncryptedGroupMessage(mrMock, deviceGroupId, jsonUpdate, userFrom)
         }
     }
 
@@ -123,14 +123,12 @@ class UpstreamRequestHandlerTest {
         val notKey1 = "not-key-1"
         val publicKey1 = "public-key-1"
         val publicKey2 = "public-key-2"
-        val groupKey = "groupKey-abc123"
 
         every { mrMock.pkm.getPublicKey(userEmail) } returns userPublicKey
         every { mrMock.pkm.getPublicKey(email1) } returns publicKey1
         every { mrMock.pkm.getPublicKey(email2) } returns publicKey2
         every { mrMock.pkm.getNotificationKey(email1) } returns notKey1
         every { mrMock.pkm.getNotificationKey(email2) } returns null
-        every { mrMock.gm.maybeCreateGroup(any(), any()) } returns groupKey
         every { mrMock.gm.registerGroup(any(), any(), any()) } answers {}
 
         val message = Json.createObjectBuilder()
@@ -146,7 +144,7 @@ class UpstreamRequestHandlerTest {
         UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
 
         // THEN
-        verify { mrMock.gm.registerGroup(groupId, groupKey, mutableSetOf(email1)) }
+        verify { mrMock.gm.registerGroup(groupId, mutableSetOf(email1), userEmail) }
         val expectedResponseJson = Json.createObjectBuilder()
             .add(Jk.DOWNSTREAM_TYPE.text, Jk.CREATE_GROUP_RESPONSE.text)
             .add(Jk.REQUEST_ID.text, messageId)
@@ -193,16 +191,14 @@ class UpstreamRequestHandlerTest {
     @Test
     fun `given create_group upstream request, sends failure message if invalid`() {
         // GIVEN
-        val userPublicKey = "user-public-key"
         val publicKey1 = "public-key-1"
         val groupId = "group-id"
         val groupName = "group-name"
         val email1 = "email-1"
 
-        every { mrMock.pkm.getPublicKey(userEmail) } returns userPublicKey
+        every { mrMock.pkm.getPublicKey(userEmail) } returns null
         every { mrMock.pkm.getPublicKey(email1) } returns publicKey1
         every { mrMock.pkm.getNotificationKey(email1) } returns null
-        every { mrMock.gm.maybeCreateGroup(any(), any()) } returns null
 
         val message = Json.createObjectBuilder()
             .add(Jk.UPSTREAM_TYPE.text, Jk.CREATE_GROUP.text)

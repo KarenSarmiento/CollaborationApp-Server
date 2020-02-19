@@ -45,7 +45,7 @@ object UpstreamRequestHandler : KLogging() {
 
         logger.info("Received an upstream packet of type: $upstreamType")
         when(upstreamType) {
-            Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(mr, message, from)
+            Jk.FORWARD_TO_GROUP.text -> handleForwardToGroupMessageRequest(mr, message, from)
             Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(mr, message, from, email, messageId)
             Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(mr, message, from, email, messageId)
             Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, message, from, email, messageId)
@@ -83,14 +83,14 @@ object UpstreamRequestHandler : KLogging() {
     }
 
     /**
-     *  Handle upstream client request to forward a json update.
+     *  Handle upstream client request to forward a message to a group.
      *
      *  @param mr MockableRes reference
      *  @param request JSON request from client. An example is shown below:
      *      {
-     *          "upstream_type" : "forward_message",
+     *          "upstream_type" : "forward_to_group",
      *          "forward_token_id" : "<token-to-forward-to>"
-     *          "json_update" : "<json-to-be-forwarded>"
+     *          "group_message" : "<json-to-be-forwarded>"
      *      }
      *
      *  The forwarded packet would then be:
@@ -104,10 +104,11 @@ object UpstreamRequestHandler : KLogging() {
      *          }
      *      }
      */
-    private fun handleForwardMessageRequest(mr: MockableRes, request: JsonObject, from: String) {
-        val jsonUpdate = getStringOrNull(request, Jk.JSON_UPDATE.text, logger) ?: return
-        val groupId = getStringOrNull(request, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
-        mr.emh.sendEncryptedGroupMessage(mr, groupId, jsonUpdate, getUniqueId(), from)
+    private fun handleForwardToGroupMessageRequest(mr: MockableRes, request: JsonObject, from: String) {
+        val message = getStringOrNull(request, Jk.GROUP_MESSAGE.text, logger) ?: return
+        val groupId = getStringOrNull(request, Jk.GROUP_ID.text, logger) ?: return
+        logger.info("Sending encrypted message to the group...")
+        mr.emh.sendEncryptedGroupMessage(mr, groupId, message, from)
     }
 
     /**
@@ -148,15 +149,13 @@ object UpstreamRequestHandler : KLogging() {
 
         // Request to create new group.
         val users = getTokensAndKeysForRegisteredUsers(mr, memberEmails)
-        val memberTokens = getTokensAsJsonArray(users.registered, userToken)
-        val groupKey = mr.gm.maybeCreateGroup(groupId, memberTokens)
         val members = createMembersJsonArray(mr, users.registered, userEmail, userToken)
 
         // Handle result and send responses.
-        if (groupKey == null || members == null) {
+        if (members == null) {
             sendRequestOutcomeResponse(mr, Jk.CREATE_GROUP_RESPONSE.text, userToken, userEmail, requestId, false)
         } else {
-            mr.gm.registerGroup(groupId, groupKey, users.registered.keys)
+            mr.gm.registerGroup(groupId, users.registered.keys, userEmail)
 
             // Notify requesting user of success.
             sendSuccessfulCreateGroupResponse(mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered, members)
@@ -207,14 +206,6 @@ object UpstreamRequestHandler : KLogging() {
                 registeredUsers[emailString] = UserContact(token, publicKey)
         }
         return Users(registeredUsers, unregisteredUsers.build())
-    }
-
-    private fun getTokensAsJsonArray(emailsToTokens: MutableMap<String, UserContact>, requesterToken: String): JsonArray {
-        val tokens = Json.createArrayBuilder()
-        for ((_, user) in emailsToTokens) {
-            tokens.add(user.token)
-        }
-        return tokens.add(requesterToken).build()
     }
 
     /**

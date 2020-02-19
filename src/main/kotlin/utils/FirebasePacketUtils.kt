@@ -19,7 +19,7 @@ enum class JsonKeyword(val text: String) {
     // Upstream Packets
     UPSTREAM_TYPE("upstream_type"),
     REGISTER_PUBLIC_KEY("register_public_key"), PUBLIC_KEY("public_key"), EMAIL("email"),
-    FORWARD_MESSAGE("forward_message"), FORWARD_TOKEN_ID("forward_token_id"), JSON_UPDATE("json_update"),
+    FORWARD_TO_GROUP("forward_to_group"), FORWARD_TOKEN_ID("forward_token_id"), GROUP_MESSAGE("group_message"),
     GET_NOTIFICATION_KEY("get_notification_key"), NOTIFICATION_KEY("notification_key"),
     CREATE_GROUP("create_group"), GROUP_ID("group_id"), MEMBER_EMAILS("member_emails"),
 
@@ -31,13 +31,6 @@ enum class JsonKeyword(val text: String) {
     CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"), MEMBERS("members"),
     ADDED_TO_GROUP("added_to_group"), GROUP_NAME("group_name"),
     FORWARD_TO_PEER("forward_to_peer"), PEER_EMAIL("peer_email"), PEER_MESSAGE("peer_message"),
-
-    // Firebase Request Packets
-    CONTENT_TYPE("Content-Type"), APPLICATION_JSON("application/json"),
-    AUTHORISATION("Authorization"), PROJECT_ID("project_id"), POST("POST"),
-    OPERATION("operation"), CREATE("create"), NOTIFICATION_KEY_NAME("notification_key_name"),
-    REGISTRATION_IDS("registration_ids")
-
 }
 
 data class UserContact(val token: String, val publicKey: String)

@@ -46,23 +46,30 @@ object EncryptedMessageHandler : KLogging() {
     /**
      *  Send encrypted group message using symmetric group key.
      */
-    fun sendEncryptedGroupMessage(mr: MockableRes, groupId: String, jsonUpdate: String, messageId: String, from: String) {
-        val groupToken = mr.gm.getFirebaseId(groupId)
-        if (groupToken == null) {
-            logger.error("There exists no group registered with id: $groupId. Will ignore message.")
+    fun sendEncryptedGroupMessage(mr: MockableRes, groupId: String, groupMessage: String, from: String) {
+        // Get members of group.
+        val members = mr.gm.getGroupMembers(groupId)
+        if (members == null) {
+            logger.error("Could not get members for group with id: $groupId. Will ignore message.")
             return
         }
-        val forwardJson = Json.createObjectBuilder()
-            .add(Jk.TO.text, groupToken)
-            .add(Jk.MESSAGE_ID.text, messageId)
-            .add(Jk.DATA.text, Json.createObjectBuilder()
-                .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
-                .add(Jk.JSON_UPDATE.text, jsonUpdate)
-                .add(Jk.ORIGINATOR.text, from)
-                .add(Jk.GROUP_ID.text, groupId)
-            ).build().toString()
-        // TODO: sendEncryptedGROUPJson instead - group key version
-        mr.fc.sendJson(forwardJson)
+
+        // Construct message to send.
+        val forwardMessage = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.FORWARD_TO_GROUP.text)
+            .add(Jk.GROUP_MESSAGE.text, groupMessage)
+            .add(Jk.ORIGINATOR.text, from)
+            .add(Jk.GROUP_ID.text, groupId)
+            .build().toString()
+
+        // For each member, send an encrypted message.
+        for (memberEmail in members) {
+            val memberToken = mr.pkm.getNotificationKey(memberEmail)
+            if (memberToken != from && memberToken != null) {
+                val messageId = getUniqueId()
+                sendEncryptedResponseJson(mr, forwardMessage, memberToken, memberEmail, messageId)
+            }
+        }
     }
 
     /**
@@ -81,6 +88,7 @@ object EncryptedMessageHandler : KLogging() {
                 .add(Jk.ENC_KEY.text, encryptedData.key)
             ).build().toString()
 
+        logger.info("Sent message to $toEmail")
         // Send encrypted JSON.
         mr.fc.sendJson(responseJson)
     }
