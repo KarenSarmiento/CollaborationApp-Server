@@ -31,6 +31,7 @@ enum class JsonKeyword(val text: String) {
     CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"), MEMBERS("members"),
     ADDED_TO_GROUP("added_to_group"), GROUP_NAME("group_name"),
     FORWARD_TO_PEER("forward_to_peer"), PEER_EMAIL("peer_email"), PEER_MESSAGE("peer_message"),
+    SERVER_SYMMETRIC_KEY("server_symmetric_key"),
 
     // Firebase Request Packets
     CONTENT_TYPE("Content-Type"), APPLICATION_JSON("application/json"),

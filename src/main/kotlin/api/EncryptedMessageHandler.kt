@@ -44,7 +44,9 @@ object EncryptedMessageHandler : KLogging() {
     }
 
     /**
-     *  Send encrypted group message using symmetric group key.
+     *  Send encrypted group message.
+     *
+     *  The packet is encrypted using the symmetric key shared with the group.
      */
     fun sendEncryptedGroupMessage(mr: MockableRes, groupId: String, jsonUpdate: String, messageId: String, from: String) {
         val groupToken = mr.gm.getFirebaseId(groupId)
@@ -53,14 +55,25 @@ object EncryptedMessageHandler : KLogging() {
             return
         }
         val forwardJson = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
+            .add(Jk.JSON_UPDATE.text, jsonUpdate)
+            .add(Jk.ORIGINATOR.text, from)
+            .build().toString()
+
+        // Encrypt the message.
+        val symKey = mr.gm.getGroupKey(groupId) ?: return
+        val encryptedMessage = mr.em.encryptAESGCM(forwardJson, symKey)
+
+//        Send ciphertext and the group id.
+        val encryptedJson = Json.createObjectBuilder()
             .add(Jk.TO.text, groupToken)
             .add(Jk.MESSAGE_ID.text, messageId)
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.DOWNSTREAM_TYPE.text, Jk.JSON_UPDATE.text)
                 .add(Jk.JSON_UPDATE.text, jsonUpdate)
                 .add(Jk.ORIGINATOR.text, from)
-                .add(Jk.GROUP_ID.text, groupId)
             ).build().toString()
+
         // TODO: sendEncryptedGROUPJson instead - group key version
         mr.fc.sendJson(forwardJson)
     }

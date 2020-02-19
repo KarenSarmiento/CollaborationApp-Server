@@ -45,7 +45,7 @@ object UpstreamRequestHandler : KLogging() {
 
         logger.info("Received an upstream packet of type: $upstreamType")
         when(upstreamType) {
-            Jk.FORWARD_MESSAGE.text -> handleForwardMessageRequest(mr, message, from)
+            Jk.FORWARD_MESSAGE.text -> handleForwardJsonUpdateRequest(mr, message, from)
             Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(mr, message, from, email, messageId)
             Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(mr, message, from, email, messageId)
             Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, message, from, email, messageId)
@@ -104,7 +104,7 @@ object UpstreamRequestHandler : KLogging() {
      *          }
      *      }
      */
-    private fun handleForwardMessageRequest(mr: MockableRes, request: JsonObject, from: String) {
+    private fun handleForwardJsonUpdateRequest(mr: MockableRes, request: JsonObject, from: String) {
         val jsonUpdate = getStringOrNull(request, Jk.JSON_UPDATE.text, logger) ?: return
         val groupId = getStringOrNull(request, Jk.FORWARD_TOKEN_ID.text, logger) ?: return
         mr.emh.sendEncryptedGroupMessage(mr, groupId, jsonUpdate, getUniqueId(), from)
@@ -149,21 +149,23 @@ object UpstreamRequestHandler : KLogging() {
         // Request to create new group.
         val users = getTokensAndKeysForRegisteredUsers(mr, memberEmails)
         val memberTokens = getTokensAsJsonArray(users.registered, userToken)
-        val groupKey = mr.gm.maybeCreateGroup(groupId, memberTokens)
+        val firebaseId = mr.gm.maybeCreateGroup(groupId, memberTokens)
         val members = createMembersJsonArray(mr, users.registered, userEmail, userToken)
 
         // Handle result and send responses.
-        if (groupKey == null || members == null) {
+        if (firebaseId == null || members == null) {
             sendRequestOutcomeResponse(mr, Jk.CREATE_GROUP_RESPONSE.text, userToken, userEmail, requestId, false)
         } else {
-            mr.gm.registerGroup(groupId, groupKey, users.registered.keys)
+            val serverSymKey = mr.em.generateKeyAESGCM()
+            mr.gm.registerGroup(groupId, firebaseId, users.registered.keys, serverSymKey)
 
             // Notify requesting user of success.
-            sendSuccessfulCreateGroupResponse(mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered, members)
+            val serverSymKeyString = mr.em.keyAsString(serverSymKey)
+            sendSuccessfulCreateGroupResponse(mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered, members, serverSymKeyString)
 
             // Notify added users that they have been added to a group.
             for ((email, user) in users.registered) {
-                sendAddedToGroupMessage(mr, user.token, groupName, groupId, email, members)
+                sendAddedToGroupMessage(mr, user.token, groupName, groupId, email, members, serverSymKeyString)
             }
         }
     }
@@ -222,7 +224,7 @@ object UpstreamRequestHandler : KLogging() {
      */
     private fun sendSuccessfulCreateGroupResponse(
         mr: MockableRes, userId: String, userEmail: String, requestId: String, groupName: String, groupId: String,
-        failedEmails: JsonArray, successfulUsers: JsonArray) {
+        failedEmails: JsonArray, successfulUsers: JsonArray, serverSymKey: String) {
         val responseJson = Json.createObjectBuilder()
             .add(Jk.DOWNSTREAM_TYPE.text, Jk.CREATE_GROUP_RESPONSE.text)
             .add(Jk.REQUEST_ID.text, requestId)
@@ -231,6 +233,7 @@ object UpstreamRequestHandler : KLogging() {
             .add(Jk.SUCCESS.text, true)
             .add(Jk.FAILED_EMAILS.text, failedEmails)
             .add(Jk.MEMBERS.text, successfulUsers)
+            .add(Jk.SERVER_SYMMETRIC_KEY.text, serverSymKey)
             .build().toString()
 
         val messageId = getUniqueId()
@@ -250,12 +253,13 @@ object UpstreamRequestHandler : KLogging() {
      *
      */
     private fun sendAddedToGroupMessage(
-        mr: MockableRes, to: String, groupName: String, groupId: String, email: String, successfulUsers: JsonArray) {
+        mr: MockableRes, to: String, groupName: String, groupId: String, email: String, successfulUsers: JsonArray, serverSymKey: String) {
         val responseJson = Json.createObjectBuilder()
             .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_TO_GROUP.text)
             .add(Jk.GROUP_NAME.text, groupName)
             .add(Jk.GROUP_ID.text, groupId)
             .add(Jk.MEMBERS.text, successfulUsers)
+            .add(Jk.SERVER_SYMMETRIC_KEY.text, serverSymKey)
             .build().toString()
 
         val messageId = getUniqueId()

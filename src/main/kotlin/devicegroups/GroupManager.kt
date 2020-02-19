@@ -10,6 +10,7 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.*
+import javax.crypto.SecretKey
 import javax.json.Json
 import javax.json.JsonArray
 
@@ -32,19 +33,19 @@ object GroupManager : KLogging() {
      *  @return The firebaseId corresponding to the created group.
      */
     fun maybeCreateGroup(groupId: String, registrationIds: JsonArray): String? {
-        // Configure HTTP Connection
+        // Configure HTTP Connection.
         val url = URL(Constants.DEVICE_GROUP_URL)
         val con = url.openConnection() as HttpURLConnection
         con.doOutput = true
 
-        // HTTP request header
+        // HTTP request header.
         con.setRequestProperty(Jk.CONTENT_TYPE.text, Jk.APPLICATION_JSON.text)
         con.setRequestProperty(Jk.AUTHORISATION.text, "key=${Constants.SERVER_KEY}")
         con.setRequestProperty(Jk.PROJECT_ID.text, Constants.SENDER_ID)
         con.requestMethod = Jk.POST.text
         con.connect()
 
-        // HTTP request
+        // HTTP request.
         val data = Json.createObjectBuilder()
             .add(Jk.OPERATION.text, Jk.CREATE.text)
             .add(Jk.NOTIFICATION_KEY_NAME.text, groupId)
@@ -62,12 +63,12 @@ object GroupManager : KLogging() {
             con.disconnect()
             return null
         }
-        // Read the response into a string
+        // Read the response into a string.
         val responseString = getStringFromStream(con.inputStream)
         con.disconnect()
         logger.info("Received create group response: $responseString.")
 
-        // Parse the JSON string and return the firebaseId
+        // Parse the JSON string and return the firebaseId.
         val response = jsonStringToJsonObject(responseString)
         return getStringOrNull(response, Jk.NOTIFICATION_KEY.text, logger)
     }
@@ -95,16 +96,30 @@ object GroupManager : KLogging() {
     }
 
     /**
+     *  Get server group key for corresponding group id.
+     *
+     *  @param groupId groupId of interest.
+     *
+     *  @return corresponding group key.
+     */
+    fun getGroupKey(groupId: String): SecretKey {
+        if (!groups.containsKey(groupId)) {
+            logger.error("Cannot get key for group $groupId since this group doesn't exist.")
+        }
+        return groups[groupId]!!.serverSymKey
+    }
+
+    /**
      * Register group.
      */
-    fun registerGroup(groupId: String, firebaseId: String, groupMembers: MutableSet<String>) {
+    fun registerGroup(groupId: String, firebaseId: String, groupMembers: MutableSet<String>, serverSymKey: SecretKey) {
         if (groupId in groups) {
             logger.error("Cannot register group with id $groupId")
             return
         }
         val existingMembers = groups.getOrDefault(groupId, null)?.members ?: mutableSetOf<String>()
         val newMembers = existingMembers.union(groupMembers).toMutableSet()
-        groups[groupId] = GroupData(firebaseId, newMembers)
+        groups[groupId] = GroupData(firebaseId, newMembers, serverSymKey)
     }
 
     private fun getStringFromStream(stream: InputStream): String {
@@ -125,4 +140,4 @@ object GroupManager : KLogging() {
  *            of the group change.
  *  members: A set which contains the emails of all the users in the group.
  */
-data class GroupData(var firebaseId: String, val members: MutableSet<String>)
+data class GroupData(var firebaseId: String, val members: MutableSet<String>, val serverSymKey: SecretKey)
