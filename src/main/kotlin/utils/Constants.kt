@@ -1,6 +1,7 @@
 package utils
 
 object Constants {
+    const val XMPP_DOMAIN = "gcm.googleapis.com"
     const val FCM_SERVER = "fcm-xmpp.googleapis.com"
     const val FCM_PROD_PORT = 5235
     const val FCM_TEST_PORT = 5236

@@ -40,7 +40,7 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
         // Specify connection configurations.
         logger.info("Connecting to the FCM XMPP Server...")
         val config = XMPPTCPConnectionConfiguration.builder()
-            .setXmppDomain(Constants.FCM_SERVER)
+            .setXmppDomain(Constants.XMPP_DOMAIN)
             .setHost(Constants.FCM_SERVER)
             .setPort(Constants.FCM_TEST_PORT)
             .setSendPresence(false)
