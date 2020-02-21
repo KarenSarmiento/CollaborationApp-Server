@@ -45,3 +45,5 @@ compileTestKotlin {
 
 apply plugin: "application"
 mainClassName = 'EntryPointKt'
+
+apply plugin: 'jacoco'

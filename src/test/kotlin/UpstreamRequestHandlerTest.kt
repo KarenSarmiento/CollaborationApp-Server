@@ -18,6 +18,7 @@ class UpstreamRequestHandlerTest {
     private lateinit var mrMock: MockableRes
     private lateinit var userFrom: String
     private lateinit var userEmail: String
+    private lateinit var userPublicKey: String
     private lateinit var messageId: String
 
     @BeforeEach
@@ -26,6 +27,7 @@ class UpstreamRequestHandlerTest {
         userFrom = "test-user"
         userEmail = "test-user@gmail.com"
         messageId = "upstream-message-id-123"
+        userPublicKey = "user-public-key-abc"
 
         // Create mocks for object classes.
         val fcMock = spyk<FirebaseXMPPClient>()
@@ -84,6 +86,156 @@ class UpstreamRequestHandlerTest {
     }
 
     @Test
+    fun `add_peer_to_group requests triggers response to requester if valid with no other members`() {
+        // GIVEN
+        val peerEmail = "peer-email-1"
+        val peerToken = "peer-token-1"
+        val peerPublicKey = "peer-public-key-1"
+        val groupId = "group-id-456"
+        val groupName = "group-name-456"
+
+        every { mrMock.pkm.getNotificationKey(peerEmail) } answers { peerToken }
+        every { mrMock.pkm.getPublicKey(peerEmail) } answers { peerPublicKey }
+        every { mrMock.pkm.getNotificationKey(userEmail) } answers { userFrom }
+        every { mrMock.pkm.getPublicKey(userEmail) } answers { userPublicKey }
+
+        val request = Json.createObjectBuilder()
+            .add(Jk.UPSTREAM_TYPE.text, Jk.ADD_PEER_TO_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .build()
+
+        // WHEN
+        GroupManager.registerGroup(groupId, mutableSetOf(userEmail))
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId)
+
+        // THEN
+        val requesterResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADD_PEER_TO_GROUP_RESPONSE.text)
+            .add(Jk.REQUEST_ID.text, messageId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .add(Jk.PEER_TOKEN.text, peerToken)
+            .add(Jk.PEER_PUBLIC_KEY.text, peerPublicKey)
+            .build().toString()
+
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, requesterResponse, userFrom, userEmail, any())
+        }
+
+        val addedPeerResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_TO_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.MEMBERS.text, Json.createArrayBuilder()
+                .add(Json.createObjectBuilder()
+                    .add(Jk.EMAIL.text, userEmail)
+                    .add(Jk.PUBLIC_KEY.text, userPublicKey)
+                    .add(Jk.NOTIFICATION_KEY.text, userFrom)
+                )
+                .add(Json.createObjectBuilder()
+                    .add(Jk.EMAIL.text, peerEmail)
+                    .add(Jk.PUBLIC_KEY.text, peerPublicKey)
+                    .add(Jk.NOTIFICATION_KEY.text, peerToken)
+                )
+            ).build().toString()
+
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, addedPeerResponse, peerToken, peerEmail, any())
+        }
+    }
+
+    @Test
+    fun `add_peer_to_group requests triggers response to requester if valid with 2 existing members`() {
+        // GIVEN
+        val peerEmail = "peer-email-1"
+        val peerToken = "peer-token-1"
+        val peerPublicKey = "peer-public-key-1"
+        val groupMemberEmail = "group-member-email-2"
+        val groupMemberToken = "group-member-token-2"
+        val groupMemberPublicKey = "group-member-pk-2"
+        val groupId = "group-id-789"
+        val groupName = "group-name-789"
+
+        every { mrMock.pkm.getNotificationKey(peerEmail) } answers { peerToken }
+        every { mrMock.pkm.getPublicKey(peerEmail) } answers { peerPublicKey }
+        every { mrMock.pkm.getNotificationKey(groupMemberEmail) } answers { groupMemberToken }
+        every { mrMock.pkm.getPublicKey(groupMemberEmail) } answers { groupMemberPublicKey }
+        every { mrMock.pkm.getNotificationKey(userEmail) } answers { userFrom }
+        every { mrMock.pkm.getPublicKey(userEmail) } answers { userPublicKey }
+
+        val request = Json.createObjectBuilder()
+            .add(Jk.UPSTREAM_TYPE.text, Jk.ADD_PEER_TO_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .build()
+
+        // WHEN
+        GroupManager.registerGroup(groupId, mutableSetOf(userEmail, groupMemberEmail))
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId)
+
+        // THEN
+        val requesterResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADD_PEER_TO_GROUP_RESPONSE.text)
+            .add(Jk.REQUEST_ID.text, messageId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .add(Jk.PEER_TOKEN.text, peerToken)
+            .add(Jk.PEER_PUBLIC_KEY.text, peerPublicKey)
+            .build().toString()
+
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, requesterResponse, userFrom, userEmail, any())
+        }
+
+        val addedPeerResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_TO_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.MEMBERS.text, Json.createArrayBuilder()
+                .add(Json.createObjectBuilder()
+                    .add(Jk.EMAIL.text, userEmail)
+                    .add(Jk.PUBLIC_KEY.text, userPublicKey)
+                    .add(Jk.NOTIFICATION_KEY.text, userFrom)
+                )
+                .add(Json.createObjectBuilder()
+                    .add(Jk.EMAIL.text, groupMemberEmail)
+                    .add(Jk.PUBLIC_KEY.text, groupMemberPublicKey)
+                    .add(Jk.NOTIFICATION_KEY.text, groupMemberToken)
+                )
+                .add(Json.createObjectBuilder()
+                    .add(Jk.EMAIL.text, peerEmail)
+                    .add(Jk.PUBLIC_KEY.text, peerPublicKey)
+                    .add(Jk.NOTIFICATION_KEY.text, peerToken)
+                )
+            ).build().toString()
+
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, addedPeerResponse, peerToken, peerEmail, any())
+        }
+
+        val groupMemberResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_PEER_TO_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .add(Jk.PEER_TOKEN.text, peerToken)
+            .add(Jk.PEER_PUBLIC_KEY.text, peerPublicKey)
+            .build().toString()
+
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, groupMemberResponse, groupMemberToken, groupMemberEmail, any())
+        }
+    }
+
+
+    @Test
     fun `forward_to_peer request messages are correctly forwarded`() {
         // GIVEN
         val peerEmail = "peer-email"
@@ -115,7 +267,6 @@ class UpstreamRequestHandlerTest {
     @Test
     fun `given create_group upstream request, sends success message if valid`() {
         // GIVEN
-        val userPublicKey = "user-public-key"
         val groupId = "group-id"
         val groupName = "group-name"
         val email1 = "email-1"

@@ -1,5 +1,6 @@
 package api
 
+import devicegroups.GroupManager
 import mu.KLogging
 import utils.*
 import javax.json.*
@@ -50,6 +51,7 @@ object UpstreamRequestHandler : KLogging() {
             Jk.REGISTER_PUBLIC_KEY.text -> handleRegisterPublicKeyRequest(mr, message, from, email, messageId)
             Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, message, from, email, messageId)
             Jk.FORWARD_TO_PEER.text -> handleForwardToPeerRequest(mr, message)
+            Jk.ADD_PEER_TO_GROUP.text -> handleAddPeerToGroupRequest(mr, message, from, email, messageId)
             else -> logger.warn(
                 "Received an unsupported upstream message type: $upstreamType.")
         }
@@ -158,7 +160,8 @@ object UpstreamRequestHandler : KLogging() {
             mr.gm.registerGroup(groupId, users.registered.keys, userEmail)
 
             // Notify requesting user of success.
-            sendSuccessfulCreateGroupResponse(mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered, members)
+            sendSuccessfulCreateGroupResponse(
+                mr, userToken, userEmail, requestId, groupName, groupId, users.unregistered, members)
 
             // Notify added users that they have been added to a group.
             for ((email, user) in users.registered) {
@@ -167,18 +170,105 @@ object UpstreamRequestHandler : KLogging() {
         }
     }
 
-    private fun createMembersJsonArray(mr: MockableRes, successfulUsers: Map<String, UserContact>, requesterEmail: String, requesterToken: String): JsonArray? {
+    /**
+     *  Handle upstream request to add peer to a group.
+     */
+    private fun handleAddPeerToGroupRequest(
+        mr: MockableRes, request: JsonObject, userToken: String, userEmail: String, requestId: String) {
+        // Get request information.
+        val groupName = getStringOrNull(request, Jk.GROUP_NAME.text, logger) ?: return
+        val groupId = getStringOrNull(request, Jk.GROUP_ID.text, logger) ?: return
+        val peerEmail = getStringOrNull(request, Jk.PEER_EMAIL.text, logger) ?: return
+
+        // Check if peer is registered.
+        val peerPublicKey = mr.pkm.getPublicKey(peerEmail)
+        val peerToken = mr.pkm.getNotificationKey(peerEmail)
+        if (peerPublicKey == null || peerToken == null) {
+            logger.error("Could not add peer $peerEmail to a group since they are not registered.")
+            sendRequestOutcomeResponse(
+                mr, Jk.ADD_PEER_TO_GROUP_RESPONSE.text, userToken, userEmail, requestId, false)
+            return
+        }
+
+        // Add peer to group.
+        mr.gm.addPeerToGroup(groupId, peerEmail)
+        logger.info("Added to $peerEmail to group $groupName was successful. Sending responses.")
+
+        // Send responses to: (1) requester (2) peer added (3) all other group members.
+        val groupEmails = GroupManager.getGroupMembers(groupId) ?: return
+        val groupMembersInfo = getTokensAndKeysForRegisteredUsers(
+            mr, setToJsonArray(groupEmails)).registered
+        val groupMembersJsonArray = createMembersJsonArray(mr, groupMembersInfo)
+
+        sendSuccessfulPeerAddedToGroupResponse(
+            mr, userToken, userEmail, requestId, groupName, groupId, peerEmail, peerToken, peerPublicKey)
+        sendAddedToGroupMessage(mr, peerToken, groupName, groupId, peerEmail, groupMembersJsonArray!!)
+
+        for ((memberEmail, memberContact) in groupMembersInfo) {
+            if (memberEmail != userEmail && memberEmail != peerEmail)
+                notifyThatPeerWasAddedToGroup(
+                    mr, memberContact.token, memberEmail, groupName, groupId, peerEmail, peerToken, peerPublicKey)
+        }
+
+    }
+
+    private fun notifyThatPeerWasAddedToGroup(
+        mr: MockableRes, toToken: String, toEmail: String, groupName: String, groupId: String, peerEmail: String,
+        peerToken: String, peerPublicKey: String) {
+        logger.info("Notifying $toEmail that $peerEmail was added to group $groupName.")
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADDED_PEER_TO_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .add(Jk.PEER_TOKEN.text, peerToken)
+            .add(Jk.PEER_PUBLIC_KEY.text, peerPublicKey)
+            .build().toString()
+
+        val messageId = getUniqueId()
+        mr.emh.sendEncryptedResponseJson(mr, responseJson, toToken, toEmail, messageId)
+
+    }
+
+    /**
+     *  Send successful added peer to group response.
+     */
+    private fun sendSuccessfulPeerAddedToGroupResponse(
+        mr: MockableRes, userId: String, userEmail: String, requestId: String, groupName: String, groupId: String,
+        peerEmail: String, peerToken: String, peerPublicKey: String) {
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.ADD_PEER_TO_GROUP_RESPONSE.text)
+            .add(Jk.REQUEST_ID.text, requestId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .add(Jk.PEER_TOKEN.text, peerToken)
+            .add(Jk.PEER_PUBLIC_KEY.text, peerPublicKey)
+            .build().toString()
+
+        val messageId = getUniqueId()
+        mr.emh.sendEncryptedResponseJson(mr, responseJson, userId, userEmail, messageId)
+
+        logger.info("Sent successful added peer to group response.")
+    }
+
+    private fun createMembersJsonArray(
+        mr: MockableRes, groupMembers: Map<String, UserContact>, requesterEmail: String? = null,
+        requesterToken: String? = null): JsonArray? {
         val addedUsers = Json.createArrayBuilder()
 
         // Add requesting user to group if they are registered.
-        val requesterPublicKey = mr.pkm.getPublicKey(requesterEmail) ?: return null
-        addedUsers.add(Json.createObjectBuilder()
-            .add(Jk.EMAIL.text, requesterEmail)
-            .add(Jk.PUBLIC_KEY.text, requesterPublicKey)
-            .add(Jk.NOTIFICATION_KEY.text, requesterToken))
+        if (requesterEmail != null && requesterToken != null) {
+            val requesterPublicKey = mr.pkm.getPublicKey(requesterEmail) ?: return null
+            addedUsers.add(Json.createObjectBuilder()
+                .add(Jk.EMAIL.text, requesterEmail)
+                .add(Jk.PUBLIC_KEY.text, requesterPublicKey)
+                .add(Jk.NOTIFICATION_KEY.text, requesterToken))
+        }
 
         // Add all other members.
-        for ((email, user) in successfulUsers) {
+        for ((email, user) in groupMembers) {
             addedUsers.add(Json.createObjectBuilder()
                 .add(Jk.EMAIL.text, email)
                 .add(Jk.PUBLIC_KEY.text, user.publicKey)

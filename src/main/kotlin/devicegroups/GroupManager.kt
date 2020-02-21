@@ -37,6 +37,13 @@ object GroupManager : KLogging() {
         groups[groupId] = GroupData(newMembers)
     }
 
+    fun addPeerToGroup(groupId: String, peerEmail: String) {
+        if (!groups.containsKey(groupId)) {
+            logger.error("Cannot add to group $groupId since this id doesn't exist.")
+        }
+        groups[groupId]!!.members.add(peerEmail)
+    }
+
     fun resetState() {
         groups = mutableMapOf()
     }

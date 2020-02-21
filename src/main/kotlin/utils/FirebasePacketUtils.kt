@@ -22,6 +22,7 @@ enum class JsonKeyword(val text: String) {
     FORWARD_TO_GROUP("forward_to_group"), FORWARD_TOKEN_ID("forward_token_id"), GROUP_MESSAGE("group_message"),
     GET_NOTIFICATION_KEY("get_notification_key"), NOTIFICATION_KEY("notification_key"),
     CREATE_GROUP("create_group"), GROUP_ID("group_id"), MEMBER_EMAILS("member_emails"),
+    ADD_PEER_TO_GROUP("add_peer_to_group"),
 
     // Downstream Packets
     TO("to"), DOWNSTREAM_TYPE("downstream_type"), REQUEST_ID("request_id"), SUCCESS("success"),
@@ -31,6 +32,8 @@ enum class JsonKeyword(val text: String) {
     CREATE_GROUP_RESPONSE("create_group_response"), FAILED_EMAILS("failed_emails"), MEMBERS("members"),
     ADDED_TO_GROUP("added_to_group"), GROUP_NAME("group_name"),
     FORWARD_TO_PEER("forward_to_peer"), PEER_EMAIL("peer_email"), PEER_MESSAGE("peer_message"),
+    ADD_PEER_TO_GROUP_RESPONSE("add_peer_to_group_response"), ADDED_PEER_TO_GROUP("added_peer_to_group"),
+    PEER_TOKEN("peer_token"), PEER_PUBLIC_KEY("peer_public_key")
 }
 
 data class UserContact(val token: String, val publicKey: String)
@@ -39,6 +42,14 @@ data class Users(val registered: MutableMap<String, UserContact>, val unregister
 fun jsonStringToJsonObject(jsonString: String): JsonObject = Json.createReader(StringReader(jsonString)).readObject()
 
 fun jsonStringToJsonArray(jsonString: String): JsonArray = Json.createReader(StringReader(jsonString)).readArray()
+
+fun setToJsonArray(set: Set<String>): JsonArray {
+    val jsonArray = Json.createArrayBuilder()
+    for (value in set) {
+        jsonArray.add(value)
+    }
+    return jsonArray.build()
+}
 
 fun getUniqueId(): String = UUID.randomUUID().toString()
 
