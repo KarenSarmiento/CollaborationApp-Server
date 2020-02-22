@@ -52,6 +52,7 @@ object UpstreamRequestHandler : KLogging() {
             Jk.CREATE_GROUP.text -> handleCreateGroupRequest(mr, message, from, email, messageId)
             Jk.FORWARD_TO_PEER.text -> handleForwardToPeerRequest(mr, message)
             Jk.ADD_PEER_TO_GROUP.text -> handleAddPeerToGroupRequest(mr, message, from, email, messageId)
+            Jk.REMOVE_PEER_FROM_GROUP.text -> handleRemovePeerFromGroupRequest(mr, message, email, messageId)
             else -> logger.warn(
                 "Received an unsupported upstream message type: $upstreamType.")
         }
@@ -168,6 +169,7 @@ object UpstreamRequestHandler : KLogging() {
                 sendAddedToGroupMessage(mr, user.token, groupName, groupId, email, members)
             }
         }
+        logger.info("Successfully created group $groupName.")
     }
 
     /**
@@ -230,9 +232,6 @@ object UpstreamRequestHandler : KLogging() {
 
     }
 
-    /**
-     *  Send successful added peer to group response.
-     */
     private fun sendSuccessfulPeerAddedToGroupResponse(
         mr: MockableRes, userId: String, userEmail: String, requestId: String, groupName: String, groupId: String,
         peerEmail: String, peerToken: String, peerPublicKey: String) {
@@ -345,6 +344,60 @@ object UpstreamRequestHandler : KLogging() {
         logger.info("Notified peer $email that they have been added to group $groupName: " +
                 prettyFormatJSON(responseJson)
         )
+    }
+
+    private fun handleRemovePeerFromGroupRequest(
+        mr: MockableRes, request: JsonObject, userEmail: String, requestId: String) {
+        // Get request information.
+        val groupName = getStringOrNull(request, Jk.GROUP_NAME.text, logger) ?: return
+        val groupId = getStringOrNull(request, Jk.GROUP_ID.text, logger) ?: return
+        val peerEmail = getStringOrNull(request, Jk.PEER_EMAIL.text, logger) ?: return
+
+        // Remove peer from group.
+        mr.gm.removePeerFromGroup(groupId, peerEmail)
+        logger.info("Removed peer $peerEmail from group $groupName. Sending responses.")
+
+        // Notify the peer that has been removed.
+        val peerToken = mr.pkm.getNotificationKey(peerEmail)
+        if (peerToken == null) {
+            logger.info("Could not send response to $peerEmail since they do not have a peerToken.")
+            return
+        }
+        val isResponse = (peerEmail == userEmail)
+        sendSuccessfulPeerRemovedFromGroupResponse(
+            mr, peerToken, peerEmail, requestId, groupName, groupId, peerEmail, isResponse)
+
+        // Send responses to all remaining group members.
+        val groupEmails = GroupManager.getGroupMembers(groupId) ?: return
+        for (memberEmail in groupEmails) {
+            val memberToken = mr.pkm.getNotificationKey(memberEmail)
+            if (memberToken == null) {
+                logger.error("Could not send remove peer update to $memberEmail since they do not have a token.")
+                continue
+            }
+            val isResponseMember = (memberEmail == userEmail)
+            sendSuccessfulPeerRemovedFromGroupResponse(
+                mr, memberToken, memberEmail, requestId, groupName, groupId, peerEmail, isResponseMember)
+        }
+    }
+
+    private fun sendSuccessfulPeerRemovedFromGroupResponse(
+        mr: MockableRes, toToken: String, toEmail: String, requestId: String, groupName: String, groupId: String,
+        peerEmail: String, isResponse: Boolean) {
+        val downstreamType = if (isResponse) Jk.REMOVE_PEER_FROM_GROUP_RESPONSE.text else Jk.REMOVED_PEER_FROM_GROUP.text
+        val responseJson = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, downstreamType)
+            .add(Jk.REQUEST_ID.text, requestId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .build().toString()
+
+        val messageId = getUniqueId()
+        mr.emh.sendEncryptedResponseJson(mr, responseJson, toToken, toEmail, messageId)
+
+        logger.info("Sent removed peer response to $toEmail")
     }
 
     /**

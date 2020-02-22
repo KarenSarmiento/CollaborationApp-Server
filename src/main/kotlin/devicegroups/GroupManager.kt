@@ -39,9 +39,18 @@ object GroupManager : KLogging() {
 
     fun addPeerToGroup(groupId: String, peerEmail: String) {
         if (!groups.containsKey(groupId)) {
-            logger.error("Cannot add to group $groupId since this id doesn't exist.")
+            logger.error("Cannot add to group $groupId since this group doesn't exist.")
+            return
         }
         groups[groupId]!!.members.add(peerEmail)
+    }
+
+    fun removePeerFromGroup(groupId: String, peerEmail: String) {
+        if (!groups.containsKey(groupId)) {
+            logger.error("Cannot remove $peerEmail from group $groupId since this group doesn't exist.")
+            return
+        }
+        groups[groupId]!!.members.remove(peerEmail)
     }
 
     fun resetState() {

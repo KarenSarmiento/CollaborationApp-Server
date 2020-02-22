@@ -49,6 +49,8 @@ class UpstreamRequestHandlerTest {
         every { mrMock.emh.sendEncryptedResponseJson(any(), any(), any(), any(), any()) } answers {}
         every { mrMock.emh.sendEncryptedGroupMessage(any(), any(), any(), any()) } answers {}
         every { mrMock.fc.sendAck(any(), any()) } answers {}
+
+        mrMock.gm.resetState()
     }
 
     @Test
@@ -82,6 +84,116 @@ class UpstreamRequestHandlerTest {
         // THEN
         verify {
             mrMock.emh.sendEncryptedGroupMessage(mrMock, deviceGroupId, jsonUpdate, userFrom)
+        }
+    }
+
+    @Test
+    fun `remove_peer_from_group when removing self triggers correct responses`() {
+        // GIVEN
+        val groupMemberEmail = "group-member-email-2"
+        val groupMemberToken = "group-member-token-2"
+        val groupMemberPublicKey = "group-member-pk-2"
+        val groupId = "group-id-abc"
+        val groupName = "group-name-abc"
+
+        every { mrMock.pkm.getNotificationKey(groupMemberEmail) } answers { groupMemberToken }
+        every { mrMock.pkm.getPublicKey(groupMemberEmail) } answers { groupMemberPublicKey }
+        every { mrMock.pkm.getNotificationKey(userEmail) } answers { userFrom }
+        every { mrMock.pkm.getPublicKey(userEmail) } answers { userPublicKey }
+
+        val request = Json.createObjectBuilder()
+            .add(Jk.UPSTREAM_TYPE.text, Jk.REMOVE_PEER_FROM_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.PEER_EMAIL.text, userEmail)
+            .build()
+
+        // WHEN
+        GroupManager.registerGroup(groupId, mutableSetOf(userEmail, groupMemberEmail))
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId)
+
+        // THEN
+        val requesterResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.REMOVE_PEER_FROM_GROUP_RESPONSE.text)
+            .add(Jk.REQUEST_ID.text, messageId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.PEER_EMAIL.text, userEmail)
+            .build().toString()
+
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, requesterResponse, userFrom, userEmail, any())
+        }
+
+        val peerResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.REMOVED_PEER_FROM_GROUP.text)
+            .add(Jk.REQUEST_ID.text, messageId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.PEER_EMAIL.text, userEmail)
+            .build().toString()
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, peerResponse, groupMemberToken, groupMemberEmail, any())
+        }
+    }
+
+    @Test
+    fun `remove_peer_from_group when removing someone else in group triggers correct responses`() {
+        // GIVEN
+        val peerEmail = "peer-email-1"
+        val peerToken = "peer-token-1"
+        val peerPublicKey = "peer-public-key-1"
+        val groupMemberEmail = "group-member-email-2"
+        val groupMemberToken = "group-member-token-2"
+        val groupMemberPublicKey = "group-member-pk-2"
+        val groupId = "group-id-abc"
+        val groupName = "group-name-abc"
+
+        every { mrMock.pkm.getNotificationKey(peerEmail) } answers { peerToken }
+        every { mrMock.pkm.getPublicKey(peerEmail) } answers { peerPublicKey }
+        every { mrMock.pkm.getNotificationKey(groupMemberEmail) } answers { groupMemberToken }
+        every { mrMock.pkm.getPublicKey(groupMemberEmail) } answers { groupMemberPublicKey }
+        every { mrMock.pkm.getNotificationKey(userEmail) } answers { userFrom }
+        every { mrMock.pkm.getPublicKey(userEmail) } answers { userPublicKey }
+
+        val request = Json.createObjectBuilder()
+            .add(Jk.UPSTREAM_TYPE.text, Jk.REMOVE_PEER_FROM_GROUP.text)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .build()
+
+        // WHEN
+        GroupManager.registerGroup(groupId, mutableSetOf(userEmail, peerEmail, groupMemberEmail))
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId)
+
+        // THEN
+        val requesterResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.REMOVE_PEER_FROM_GROUP_RESPONSE.text)
+            .add(Jk.REQUEST_ID.text, messageId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .build().toString()
+
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, requesterResponse, userFrom, userEmail, any())
+        }
+
+        val peerResponse = Json.createObjectBuilder()
+            .add(Jk.DOWNSTREAM_TYPE.text, Jk.REMOVED_PEER_FROM_GROUP.text)
+            .add(Jk.REQUEST_ID.text, messageId)
+            .add(Jk.GROUP_NAME.text, groupName)
+            .add(Jk.GROUP_ID.text, groupId)
+            .add(Jk.SUCCESS.text, true)
+            .add(Jk.PEER_EMAIL.text, peerEmail)
+            .build().toString()
+        verify {
+            mrMock.emh.sendEncryptedResponseJson(mrMock, peerResponse, peerToken, peerEmail, any())
+            mrMock.emh.sendEncryptedResponseJson(mrMock, peerResponse, groupMemberToken, groupMemberEmail, any())
         }
     }
 

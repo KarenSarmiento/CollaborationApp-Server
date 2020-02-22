@@ -73,15 +73,15 @@ object EncryptedMessageHandler : KLogging() {
     }
 
     /**
-     *  Encrypt packet using user's public key, store this in a message, and send that to the user.
+     *  Encrypt packet using user's public key, store this in a message, and send that to toToken.
      */
-    fun sendEncryptedResponseJson(mr: MockableRes, response: String, to: String, toEmail: String, messageId: String) {
+    fun sendEncryptedResponseJson(mr: MockableRes, response: String, toToken: String, toEmail: String, messageId: String) {
         // Encrypt JSON response.
         val encryptedData = encryptMessage(mr, response, toEmail) ?: return
 
         // Create response.
         val responseJson = Json.createObjectBuilder()
-            .add(Jk.TO.text, to)
+            .add(Jk.TO.text, toToken)
             .add(Jk.MESSAGE_ID.text, messageId)
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.ENC_MESSAGE.text, encryptedData.message)

@@ -33,7 +33,10 @@ enum class JsonKeyword(val text: String) {
     ADDED_TO_GROUP("added_to_group"), GROUP_NAME("group_name"),
     FORWARD_TO_PEER("forward_to_peer"), PEER_EMAIL("peer_email"), PEER_MESSAGE("peer_message"),
     ADD_PEER_TO_GROUP_RESPONSE("add_peer_to_group_response"), ADDED_PEER_TO_GROUP("added_peer_to_group"),
-    PEER_TOKEN("peer_token"), PEER_PUBLIC_KEY("peer_public_key")
+    PEER_TOKEN("peer_token"), PEER_PUBLIC_KEY("peer_public_key"),
+    REMOVE_PEER_FROM_GROUP_RESPONSE("remove_peer_from_group_response"),
+    REMOVED_FROM_GROUP("removed_from_group"), REMOVED_PEER_FROM_GROUP("removed_peer_from_group"),
+    REMOVE_PEER_FROM_GROUP("remove_peer_from_group"),
 }
 
 data class UserContact(val token: String, val publicKey: String)
