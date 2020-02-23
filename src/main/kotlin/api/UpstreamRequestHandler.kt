@@ -71,7 +71,7 @@ object UpstreamRequestHandler : KLogging() {
      */
     private fun handleForwardToPeerRequest(mr: MockableRes, request: JsonObject) {
         val peerEmail = getStringOrNull(request, Jk.PEER_EMAIL.text, logger) ?: return
-        val peerMessage = getStringOrNull(request, Jk.PEER_MESSAGE.text, logger) ?: return
+        val peerMessage = getJsonObjectOrNull(request, Jk.PEER_MESSAGE.text, logger) ?: return
         val peerToken = mr.pkm.getNotificationKey(peerEmail) ?: return
 
         // Construct forward message.
