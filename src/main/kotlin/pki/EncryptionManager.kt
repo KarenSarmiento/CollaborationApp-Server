@@ -154,6 +154,16 @@ object EncryptionManager : KLogging() {
         return String(Base64.getMimeEncoder().encode(encryptedBytes))
     }
 
+    private fun decryptDigitalSignature(ciphertext: String, publicKey: PublicKey): String {
+        // Get an RSA cipher object and print the provider
+        val cipher = Cipher.getInstance(RSA_TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, publicKey)
+
+        // Decrypt the plaintext and return as string.
+        val encryptedBytes = Base64.getMimeDecoder().decode(ciphertext)
+        val decryptedBytes = cipher.doFinal(encryptedBytes)
+        return String(decryptedBytes)
+    }
 
     private fun decryptFromKeyRSA(ciphertext: String, privateKey: PrivateKey): String {
         // Get an RSA cipher object and print the provider
@@ -164,6 +174,23 @@ object EncryptionManager : KLogging() {
         val encryptedBytes = Base64.getMimeDecoder().decode(ciphertext)
         val decryptedBytes = cipher.doFinal(encryptedBytes)
         return String(decryptedBytes)
+    }
+
+    /**
+     *  Authenticating messages with digital signatures.
+     */
+    fun sha256(plaintext: String): String {
+        val bytes = plaintext.toByteArray()
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(bytes)
+        return digest.fold("", { str, it -> str + "%02x".format(it) })
+    }
+
+    fun authenticateSignature(signature: String, message: String, senderPublicKey: String) : Boolean {
+        val senderKey = stringToPublicKeyRSA(senderPublicKey)
+        val messageHash = sha256(message)
+        val decryptedHash = decryptDigitalSignature(signature, senderKey)
+        return messageHash == decryptedHash
     }
 
     /**

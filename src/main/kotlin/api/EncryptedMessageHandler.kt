@@ -1,6 +1,7 @@
 package api
 
 import mu.KLogging
+import pki.PublicKeyManager
 import utils.*
 import javax.json.Json
 import utils.JsonKeyword as Jk
@@ -15,15 +16,24 @@ object EncryptedMessageHandler : KLogging() {
         val from = getStringOrNull(packet, Jk.FROM.text, logger) ?: return
         val messageId = getStringOrNull(packet, Jk.MESSAGE_ID.text, logger) ?: return
 
-        // Decrypt data to find the request message JSON.
+        // Authenticate the message.
+        var authenticated = false
         val data = getJsonObjectOrNull(packet, Jk.DATA.text, logger) ?: return
         val email = getStringOrNull(data, Jk.EMAIL.text, logger) ?: return
+        val signature = getStringOrNull(data, Jk.SIGNATURE.text, logger)
+        if (signature != null) {
+            val encryptedMessage = getStringOrNull(data, Jk.ENC_MESSAGE.text, logger) ?: return
+            val senderPublicKey = PublicKeyManager.getPublicKey(email) ?: return
+            if (!mr.em.authenticateSignature(signature, encryptedMessage, senderPublicKey)) return
+            authenticated = true
+        }
+
+        // Decrypt data to find the request message JSON.
         val message = mr.emh.getDecryptedMessage(mr, data) ?: return
 
         // Handle the decrypted request.
-        mr.urh.handleUpstreamRequests(mr, message, from, email, messageId)
+        mr.urh.handleUpstreamRequests(mr, message, from, email, messageId, authenticated)
     }
-
 
     /**
      *  Decrypts data part of received packet and returns JSON object.

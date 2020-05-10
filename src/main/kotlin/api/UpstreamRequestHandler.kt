@@ -37,12 +37,18 @@ object UpstreamRequestHandler : KLogging() {
      *  @param email Email of requesting user.
      *  @param messageId Message Id of the request.
      */
-    fun handleUpstreamRequests(mr: MockableRes, message: JsonObject, from: String, email: String, messageId: String) {
+    fun handleUpstreamRequests(
+        mr: MockableRes, message: JsonObject, from: String, email: String, messageId: String, authenticated: Boolean) {
         // All upstream messages must be ACKed.
         mr.fc.sendAck(from, messageId)
 
         // Determine type of upstream packet.
         val upstreamType = getStringOrNull(message, Jk.UPSTREAM_TYPE.text, logger) ?: return
+
+        // The message MUST be authenticated unless it is a REGISTER_PUBLIC_KEY request.
+        if (!authenticated && upstreamType != Jk.REGISTER_PUBLIC_KEY.text) {
+            logger.error("Received an unauthenticated message. Will drop packet.")
+        }
 
         logger.info("Received an upstream packet of type: $upstreamType")
         when(upstreamType) {
