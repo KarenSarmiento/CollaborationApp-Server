@@ -1,6 +1,7 @@
 package api
 
 import mu.KLogging
+import pki.EncryptionManager
 import pki.PublicKeyManager
 import utils.*
 import javax.json.Json
@@ -44,7 +45,7 @@ object EncryptedMessageHandler : KLogging() {
         val encryptedMessage = getStringOrNull(data, Jk.ENC_MESSAGE.text, logger) ?: return null
 
         // Decrypt AES key and obtain SecretKey object.
-        val decryptedKey = mr.em.maybeDecryptRSA(encryptedKey, mr.em.PRIVATE_KEY) ?: return null
+        val decryptedKey = mr.em.maybeDecryptRSA(encryptedKey, mr.em.PRIVATE_KEY_STRING) ?: return null
         val secretKey = mr.em.stringToKeyAESGCM(decryptedKey)
 
         // Decrypt Message and return as JSON object.
@@ -88,6 +89,8 @@ object EncryptedMessageHandler : KLogging() {
         // Encrypt JSON response.
         val encryptedData = encryptMessage(mr, response, toEmail) ?: return
 
+        // Create digital signature.
+        val signature = EncryptionManager.createDigitalSignature(encryptedData.message)
         // Create response.
         val responseJson = Json.createObjectBuilder()
             .add(Jk.TO.text, toToken)
@@ -95,6 +98,7 @@ object EncryptedMessageHandler : KLogging() {
             .add(Jk.DATA.text, Json.createObjectBuilder()
                 .add(Jk.ENC_MESSAGE.text, encryptedData.message)
                 .add(Jk.ENC_KEY.text, encryptedData.key)
+                .add(Jk.SIGNATURE.text, signature)
             ).build().toString()
 
         logger.info("Sent message to $toEmail")
