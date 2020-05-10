@@ -59,20 +59,20 @@ fun getUniqueId(): String = UUID.randomUUID().toString()
 fun getStringOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): String? {
     val field = jsonObject.getString(fieldName, null)
     if (field == null)
-        logger.error("Missing string field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString())}")
+        logger.error("Missing string field \"$fieldName\".")
     return field
 }
 
 fun getJsonObjectOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): JsonObject? {
     val field = jsonObject.getJsonObject(fieldName)
     if (field == null)
-        logger.error("Missing object field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString())}")
+        logger.error("Missing object field \"$fieldName\".")
     return field
 }
 
 fun getJsonArrayOrNull(jsonObject: JsonObject, fieldName: String, logger: KLogger): JsonArray? {
     val field = jsonObject.getJsonArray(fieldName)
     if (field == null)
-        logger.error("Missing array field \"$fieldName\" in packet ${prettyFormatJSON(jsonObject.toString())}")
+        logger.error("Missing array field \"$fieldName\".")
     return field
 }
