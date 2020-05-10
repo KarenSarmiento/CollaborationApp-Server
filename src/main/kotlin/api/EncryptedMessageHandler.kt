@@ -39,7 +39,6 @@ object EncryptedMessageHandler : KLogging() {
 
         // Decrypt Message and return as JSON object.
         val decryptedMessage = mr.em.decryptAESGCM(encryptedMessage, secretKey)
-        print("Decrypted and got: ${jsonStringToJsonObject(decryptedMessage)}")
         return jsonStringToJsonObject(decryptedMessage)
     }
 

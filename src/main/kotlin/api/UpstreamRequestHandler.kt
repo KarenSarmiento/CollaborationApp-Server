@@ -481,7 +481,7 @@ object UpstreamRequestHandler : KLogging() {
         mr: MockableRes, request: JsonObject, userId: String, userEmail: String, requestId: String) {
         val email = getStringOrNull(request, Jk.EMAIL.text, logger) ?: return
         val publicKey = getStringOrNull(request, Jk.PUBLIC_KEY.text, logger) ?: return
-        logger.info("Registering $email with notification key $userId and public key $publicKey")
+        logger.info("Registering $email.")
 
         val outcome = mr.pkm.maybeAddPublicKey(email, userId, publicKey)
         sendRequestOutcomeResponse(mr, Jk.REGISTER_PUBLIC_KEY_RESPONSE.text, userId, userEmail, requestId, outcome)
