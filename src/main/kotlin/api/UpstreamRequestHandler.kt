@@ -114,7 +114,7 @@ object UpstreamRequestHandler : KLogging() {
      *      }
      */
     private fun handleForwardToGroupMessageRequest(mr: MockableRes, request: JsonObject, from: String) {
-        val message = getStringOrNull(request, Jk.GROUP_MESSAGE.text, logger) ?: return
+        val message = getJsonObjectOrNull(request, Jk.GROUP_MESSAGE.text, logger) ?: return
         val groupId = getStringOrNull(request, Jk.GROUP_ID.text, logger) ?: return
         logger.info("Sending encrypted message to the group...")
         mr.emh.sendEncryptedGroupMessage(mr, groupId, message, from)

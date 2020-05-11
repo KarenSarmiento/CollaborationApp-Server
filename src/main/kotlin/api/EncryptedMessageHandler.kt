@@ -56,7 +56,7 @@ object EncryptedMessageHandler : KLogging() {
     /**
      *  Send encrypted group message using symmetric group key.
      */
-    fun sendEncryptedGroupMessage(mr: MockableRes, groupId: String, groupMessage: String, from: String) {
+    fun sendEncryptedGroupMessage(mr: MockableRes, groupId: String, groupMessage: JsonObject, from: String) {
         // Get members of group.
         val members = mr.gm.getGroupMembers(groupId)
         if (members == null) {
