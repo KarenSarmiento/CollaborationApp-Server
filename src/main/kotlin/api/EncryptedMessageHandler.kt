@@ -99,6 +99,8 @@ object EncryptedMessageHandler : KLogging() {
                 .add(Jk.ENC_MESSAGE.text, encryptedData.message)
                 .add(Jk.ENC_KEY.text, encryptedData.key)
                 .add(Jk.SIGNATURE.text, signature)
+            ).add(Jk.ANDROID.text, Json.createObjectBuilder()
+                .add(Jk.PRIORITY.text, Jk.HIGH.text)
             ).build().toString()
 
         logger.info("Sent message to $toEmail")
