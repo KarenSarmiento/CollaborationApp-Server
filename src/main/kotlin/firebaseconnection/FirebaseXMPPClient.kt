@@ -18,6 +18,7 @@ import org.jivesoftware.smack.packet.StandardExtensionElement
 import utils.*
 import javax.json.Json
 import kotlinx.coroutines.*
+import org.jivesoftware.smack.roster.Roster
 import javax.json.JsonObject
 
 
@@ -59,7 +60,7 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
         ReconnectionManager.getInstanceFor(xmppConn).addReconnectionListener(this)
 
         // Disable Roster (contact list). This will be managed directly with Firebase.
-//        Roster.getInstanceFor(xmppConn).isRosterLoadedAtLogin = false
+        Roster.getInstanceFor(xmppConn).isRosterLoadedAtLogin = false
 
         // FCM requires a SASL PLAIN authentication mechanism.
         SASLAuthentication.unBlacklistSASLMechanism("PLAIN")
@@ -88,12 +89,12 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
     }
 
     fun processStanzaTestable(mr: MockableRes, packet: Stanza) {
-        logger.info("Processing Stanza in thread: ${Thread.currentThread().name} ${Thread.currentThread().id}")
+//        logger.info("Processing Stanza in thread: ${Thread.currentThread().name} ${Thread.currentThread().id}")
         val extendedPacket = packet.getExtension(Constants.FCM_NAMESPACE) as StandardExtensionElement
         val extendedPacketJson = jsonStringToJsonObject(extendedPacket.text)
 
         when(extendedPacketJson.getString(Jk.MESSAGE_TYPE.text, null)) {
-            Jk.ACK.text -> logger.warn("ACK receipt not yet supported.")
+            Jk.ACK.text -> {}//logger.warn("ACK receipt not yet supported.")
             Jk.NACK.text -> handleNack(extendedPacketJson)
             Jk.CONTROL.text -> logger.warn("Control message receipt not yet supported.")
             else -> mr.emh.handleEncryptedMessage(mr, extendedPacketJson) // upstream has unspecified message type.
@@ -106,7 +107,7 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
 
     fun sendAck(from: String, messageId: String) {
         // TODO: Exponential backoff in case of connection failure?
-        logger.info("Sent ack to $from.")
+//        logger.info("Sent ack to $from.")
         val ackJson = createAckJson(from, messageId)
         sendJson(ackJson)
     }
@@ -133,6 +134,22 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
             // TODO: Do something in case connection is lost.
             logger.error("Could not send stanza since connection is null.")
         }
+    }
+
+    fun closeConnection() {
+        logger.info("Detaching all the listeners for the connection.")
+        ReconnectionManager.getInstanceFor(xmppConn).removeReconnectionListener(this)
+        xmppConn?.removeAsyncStanzaListener(this)
+        xmppConn?.removeConnectionListener(this)
+        xmppConn?.removeStanzaInterceptor(this)
+        xmppConn?.removeAllRequestAckPredicates()
+        xmppConn?.removeAllStanzaAcknowledgedListeners()
+        xmppConn?.removeAllStanzaIdAcknowledgedListeners()
+        xmppConn?.removeStanzaSendingListener(this)
+        xmppConn?.removeStanzaAcknowledgedListener(this)
+        xmppConn?.removeAllRequestAckPredicates()
+        logger.info("Disconnecting the xmpp server from FCM.")
+        xmppConn?.disconnect()
     }
 
     /**
@@ -164,5 +181,4 @@ object FirebaseXMPPClient : StanzaListener, ConnectionListener, ReconnectionList
     override fun reconnectingIn(seconds: Int) {
         logger.info("Reconnecting in $seconds...")
     }
-
 }

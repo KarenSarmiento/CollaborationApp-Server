@@ -50,7 +50,7 @@ object UpstreamRequestHandler : KLogging() {
             logger.error("Received an unauthenticated message. Will drop packet.")
         }
 
-        logger.info("Received an upstream packet of type: $upstreamType")
+//        logger.info("Received an upstream packet of type: $upstreamType")
         when(upstreamType) {
             Jk.FORWARD_TO_GROUP.text -> handleForwardToGroupMessageRequest(mr, message, from)
             Jk.GET_NOTIFICATION_KEY.text -> handleGetNotificationKeyRequest(mr, message, from, email, messageId)

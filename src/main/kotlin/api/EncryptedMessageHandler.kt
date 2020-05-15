@@ -13,9 +13,11 @@ object EncryptedMessageHandler : KLogging() {
      * Decrypts and handles an upstream message.
      */
     fun handleEncryptedMessage(mr: MockableRes, packet: JsonObject) {
+        logger.info("Received encrypted packet")
         // All upstream packets must have to following fields. If null, then log error and return.
         val from = getStringOrNull(packet, Jk.FROM.text, logger) ?: return
         val messageId = getStringOrNull(packet, Jk.MESSAGE_ID.text, logger) ?: return
+        logger.info("with id $messageId")
 
         // Authenticate the message.
         var authenticated = false
@@ -74,6 +76,7 @@ object EncryptedMessageHandler : KLogging() {
 
         // For each member, send an encrypted message.
         for (memberEmail in members) {
+            logger.info("Sending encrypted group message to $memberEmail")
             val memberToken = mr.pkm.getNotificationKey(memberEmail)
             if (memberToken != from && memberToken != null) {
                 val messageId = getUniqueId()
@@ -100,7 +103,7 @@ object EncryptedMessageHandler : KLogging() {
                 .add(Jk.ENC_KEY.text, encryptedData.key)
                 .add(Jk.SIGNATURE.text, signature)
             ).add(Jk.ANDROID.text, Json.createObjectBuilder()
-                .add(Jk.PRIORITY.text, Jk.HIGH.text)
+                .add(Jk.PRIORITY.text, Jk.NORMAL.text)
             ).build().toString()
 
         logger.info("Sent message to $toEmail")
