@@ -61,29 +61,34 @@ class UpstreamRequestHandlerTest {
             .build()
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId, true)
 
         // THEN
         verify { mrMock.fc.sendAck(userFrom, messageId) }
     }
 
     @Test
-    fun `upstream requests of type forward_message are forwarded correctly`() {
+    fun `upstream requests of type FORWARD_TO_GROUP are forwarded correctly`() {
         // GIVEN
         val deviceGroupId = "device-group-id"
-        val jsonUpdate = "{test-update-json}"
         val message = Json.createObjectBuilder()
             .add(Jk.UPSTREAM_TYPE.text, Jk.FORWARD_TO_GROUP.text)
             .add(Jk.GROUP_ID.text, deviceGroupId)
-            .add(Jk.GROUP_MESSAGE.text, jsonUpdate)
+            .add(Jk.GROUP_MESSAGE.text, Json.createObjectBuilder()
+                .add("update", "addTodo"))
             .build()
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId, true)
 
         // THEN
         verify {
-            mrMock.emh.sendEncryptedGroupMessage(mrMock, deviceGroupId, jsonUpdate, userFrom)
+            mrMock.emh.sendEncryptedGroupMessage(
+                mrMock,
+                deviceGroupId,
+                Json.createObjectBuilder().add("update", "addTodo").build(),
+                userFrom
+            )
         }
     }
 
@@ -110,7 +115,7 @@ class UpstreamRequestHandlerTest {
 
         // WHEN
         GroupManager.registerGroup(groupId, mutableSetOf(userEmail, groupMemberEmail))
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId, true)
 
         // THEN
         val requesterResponse = Json.createObjectBuilder()
@@ -167,7 +172,7 @@ class UpstreamRequestHandlerTest {
 
         // WHEN
         GroupManager.registerGroup(groupId, mutableSetOf(userEmail, peerEmail, groupMemberEmail))
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId, true)
 
         // THEN
         val requesterResponse = Json.createObjectBuilder()
@@ -220,7 +225,7 @@ class UpstreamRequestHandlerTest {
 
         // WHEN
         GroupManager.registerGroup(groupId, mutableSetOf(userEmail))
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId, true)
 
         // THEN
         val requesterResponse = Json.createObjectBuilder()
@@ -288,7 +293,7 @@ class UpstreamRequestHandlerTest {
 
         // WHEN
         GroupManager.registerGroup(groupId, mutableSetOf(userEmail, groupMemberEmail))
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, request, userFrom, userEmail, messageId, true)
 
         // THEN
         val requesterResponse = Json.createObjectBuilder()
@@ -351,7 +356,6 @@ class UpstreamRequestHandlerTest {
     fun `forward_to_peer request messages are correctly forwarded`() {
         // GIVEN
         val peerEmail = "peer-email"
-        val peerMessage = "{hello there peer :)}"
         val peerToken = "peer-token"
 
         every { mrMock.pkm.getNotificationKey(peerEmail) } answers { peerToken }
@@ -359,16 +363,18 @@ class UpstreamRequestHandlerTest {
         val message = Json.createObjectBuilder()
             .add(Jk.UPSTREAM_TYPE.text, Jk.FORWARD_TO_PEER.text)
             .add(Jk.PEER_EMAIL.text, peerEmail)
-            .add(Jk.PEER_MESSAGE.text, peerMessage)
+            .add(Jk.PEER_MESSAGE.text, Json.createObjectBuilder()
+                .add("update", "addTodo"))
             .build()
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId, true)
 
         // THEN
         val responseJson = Json.createObjectBuilder()
             .add(Jk.DOWNSTREAM_TYPE.text, Jk.FORWARD_TO_PEER.text)
-            .add(Jk.PEER_MESSAGE.text, peerMessage)
+            .add(Jk.PEER_MESSAGE.text, Json.createObjectBuilder()
+                .add("update", "addTodo"))
             .build().toString()
 
         verify {
@@ -404,7 +410,7 @@ class UpstreamRequestHandlerTest {
             ).build()
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId, true)
 
         // THEN
         verify { mrMock.gm.registerGroup(groupId, mutableSetOf(email1), userEmail) }
@@ -472,7 +478,7 @@ class UpstreamRequestHandlerTest {
             ).build()
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId, true)
 
         // THEN
         val expectedResponse = Json.createObjectBuilder()
@@ -496,7 +502,7 @@ class UpstreamRequestHandlerTest {
             .build()
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId, true)
 
         // THEN
         val expectedResponse = Json.createObjectBuilder()
@@ -529,7 +535,7 @@ class UpstreamRequestHandlerTest {
             .build()
 
         // WHEN
-        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId)
+        UpstreamRequestHandler.handleUpstreamRequests(mrMock, message, userFrom, userEmail, messageId, true)
 
         // THEN
         val expectedResponse = Json.createObjectBuilder()

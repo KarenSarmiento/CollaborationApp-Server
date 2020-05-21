@@ -7,6 +7,7 @@ import org.jivesoftware.smack.util.PacketParserUtils
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import firebaseconnection.FirebaseXMPPClient
+import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import pki.EncryptionManager
@@ -14,6 +15,7 @@ import pki.PublicKeyManager
 import utils.MockableRes
 import utils.jsonStringToJsonObject
 import utils.removeWhitespacesAndNewlines
+import java.lang.reflect.Modifier
 import utils.JsonKeyword as Jk
 import javax.json.Json
 
@@ -80,7 +82,6 @@ class FirebaseXMPPClientTest {
         verify { mrMock.emh.handleEncryptedMessage(mrMock, expectedRequestJson)}
     }
 
-    // TODO: Test cases such as invalid user id or message id
     @Test
     fun `sendAck creates ack in correct format`() {
         // GIVEN
@@ -107,5 +108,31 @@ class FirebaseXMPPClientTest {
             </message>
         """).toRegex()
         assertTrue(expectedAckRegex matches actualAck)
+    }
+
+    @Test
+    fun `close connection calls disconnect`() {
+        // GIVEN
+        val connectionMock = spyk<XMPPTCPConnection>()
+        connectionMock.mockPrivateFields(connectionMock)
+
+        // WHEN
+        FirebaseXMPPClient.closeConnection()
+
+        // THEN
+        verify {
+            connectionMock.disconnect()
+        }
+    }
+
+    private fun Any.mockPrivateFields(vararg mocks: Any): Any {
+        mocks.forEach { mock ->
+            javaClass.declaredFields
+                .filter { it.modifiers.and(Modifier.PRIVATE) > 0 || it.modifiers.and(Modifier.PROTECTED) > 0 }
+                .firstOrNull { it.type == mock.javaClass}
+                ?.also { it.isAccessible = true }
+                ?.set(this, mock)
+        }
+        return this
     }
 }

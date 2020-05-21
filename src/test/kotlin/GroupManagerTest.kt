@@ -43,4 +43,32 @@ class GroupManagerTest {
         // THEN
         assertEquals(groupMembers1.toSet(), membersActual)
     }
+
+    @Test
+    fun `peers can be correctly removed from groups`() {
+        // GIVEN
+        val groupId = "group-id"
+        val groupMembers1 = mutableSetOf<String>("m1", "m2")
+        GroupManager.registerGroup(groupId, groupMembers1)
+
+        // WHEN
+        GroupManager.removePeerFromGroup(groupId, "m1")
+
+        // THEN
+        assertEquals(setOf("m2"), GroupManager.getGroupMembers(groupId))
+    }
+
+    @Test
+    fun `peers can be correctly added to groups`() {
+        // GIVEN
+        val groupId = "group-id"
+        val groupMembers1 = mutableSetOf<String>("m1")
+        GroupManager.registerGroup(groupId, groupMembers1)
+
+        // WHEN
+        GroupManager.addPeerToGroup(groupId, "m2")
+
+        // THEN
+        assertEquals(setOf("m1", "m2"), GroupManager.getGroupMembers(groupId))
+    }
 }

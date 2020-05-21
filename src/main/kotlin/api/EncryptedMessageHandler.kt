@@ -1,7 +1,6 @@
 package api
 
 import mu.KLogging
-import pki.EncryptionManager
 import pki.PublicKeyManager
 import utils.*
 import javax.json.Json
@@ -9,6 +8,7 @@ import utils.JsonKeyword as Jk
 import javax.json.JsonObject
 
 object EncryptedMessageHandler : KLogging() {
+    private val LARGE_GROUP = true
     /**
      * Decrypts and handles an upstream message.
      */
@@ -81,6 +81,12 @@ object EncryptedMessageHandler : KLogging() {
             if (memberToken != from && memberToken != null) {
                 val messageId = getUniqueId()
                 sendEncryptedResponseJson(mr, forwardMessage, memberToken, memberEmail, messageId)
+                if (memberEmail == "devtest.karen@gmail.com" && LARGE_GROUP) {
+                    for (i in 0..48) {
+                        val messageId = getUniqueId()
+                        sendEncryptedResponseJson(mr, forwardMessage, memberToken, memberEmail, messageId)
+                    }
+                }
             }
         }
     }
@@ -90,10 +96,10 @@ object EncryptedMessageHandler : KLogging() {
      */
     fun sendEncryptedResponseJson(mr: MockableRes, response: String, toToken: String, toEmail: String, messageId: String) {
         // Encrypt JSON response.
-        val encryptedData = encryptMessage(mr, response, toEmail) ?: return
+        val encryptedData = mr.emh.encryptMessage(mr, response, toEmail) ?: return
 
         // Create digital signature.
-        val signature = EncryptionManager.createDigitalSignature(encryptedData.message)
+        val signature = mr.em.createDigitalSignature(encryptedData.message)
         // Create response.
         val responseJson = Json.createObjectBuilder()
             .add(Jk.TO.text, toToken)
@@ -111,7 +117,7 @@ object EncryptedMessageHandler : KLogging() {
         mr.fc.sendJson(responseJson)
     }
 
-    private fun encryptMessage(mr: MockableRes, value: String, email: String): EncryptedData? {
+   private fun encryptMessage(mr: MockableRes, value: String, email: String): EncryptedData? {
         val publicKey = mr.pkm.getPublicKey(email)
         if (publicKey == null) {
             logger.error(

@@ -37,7 +37,7 @@ class EncryptedMessageHandlerTest {
         every { mrMock.emh } answers { emhMock }
 
         // Prevent actually handling upstream encrypted messages.
-        every { mrMock.urh.handleUpstreamRequests(any(), any(), any(), any(), any()) } answers {}
+        every { mrMock.urh.handleUpstreamRequests(any(), any(), any(), any(), any(), any()) } answers {}
         every { mrMock.fc.sendJson(any()) } answers {}
     }
 
@@ -80,7 +80,7 @@ class EncryptedMessageHandlerTest {
             .add(Jk.EMAIL.text, userEmail)
             .add(Jk.PUBLIC_KEY.text, publicKey)
             .build()
-        verify { mrMock.urh.handleUpstreamRequests(mrMock, expectedDataJson, userFrom, userEmail, messageId) }
+        verify { mrMock.urh.handleUpstreamRequests(mrMock, expectedDataJson, userFrom, userEmail, messageId, false) }
     }
 
     @Test
@@ -111,14 +111,59 @@ class EncryptedMessageHandlerTest {
                 "message_id": "$messageId",
                 "data": \{
                     "enc_message": "(.)+",
-                    "enc_key": "(.)+
-                \}
+                    "enc_key": "(.)+",
+                    "signature": "(.)+"
+                \},
+                "android":\{"priority":"normal"\}
             \}
         """).toRegex()
         verify {
-//            mrMock.em.generateKeyAESGCM()
-//            mrMock.em.encryptAESGCM(response, any())
-//            mrMock.em.maybeEncryptRSA(any(), publicKey)
+//            mrMock.emh.encryptMessage(any(), any(), any())
+            mrMock.fc.sendJson( match {
+                removeWhitespacesAndNewlines(it) matches expectedJson
+            } )
+        }
+    }
+
+    @Test
+    fun `sendEncryptedGroupMessage encrypts and sends a json to group member`() {
+        // GIVEN
+        val groupMessage = Json.createObjectBuilder().add("key", "value").build()
+        val from = "from"
+        val to = "test-user"
+        val toEmail = "test-user@gmail.com"
+        val messageId = "test-message-123"
+        val groupId = "group-id"
+        val publicKey = """
+            MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvyYNyotGPP78W55yNLLYJAbDsbNh+Vb0
+            PB99r+ylWns8KNhLGa8JmN43ivgUGWCe+hcvBlC0pSjDWz8YFUOKLF8/B6gQrjvxc+zz0Q1dQIJe
+            6/P43MvhW/fPbdH62sqpIx7P/NfD6EYI7g1ZPS5Xs09LJSI8an9wAlRKGhPoumUAbXJNFrHJK/mv
+            66GTmeHZ5s+0TYWgqDJMk7hR3hPHqEvkHa8GrljII11GtPpN3t++R1McP7mot2KLPOh4LZONTfvk
+            SXi79ngP2+mcgqZ7ivChbSDTIgno0CdS8McS1pH0MRquvjBhWZYbIEI9Ayvd9ML/a+lE/1O+BVps
+            u3Lx0QIDAQAB
+        """.trimIndent()
+        every { mrMock.pkm.getPublicKey(toEmail) } answers { publicKey }
+        every { mrMock.pkm.getNotificationKey(toEmail) } answers { to }
+        every { mrMock.gm.getGroupMembers(groupId) } answers { setOf(toEmail) }
+
+        // WHEN
+        EncryptedMessageHandler.sendEncryptedGroupMessage(mrMock, groupId, groupMessage, from)
+
+        // THEN
+        // The actual encrypted string will not be verified due to randomness introduced by IV and AES key.
+        val expectedJson = removeWhitespacesAndNewlines("""
+            \{
+                "to": "$to",
+                "message_id": "(.)+",
+                "data": \{
+                    "enc_message": "(.)+",
+                    "enc_key": "(.)+",
+                    "signature": "(.)+"
+                \},
+                "android":\{"priority":"normal"\}
+            \}
+        """).toRegex()
+        verify {
             mrMock.fc.sendJson( match {
                 removeWhitespacesAndNewlines(it) matches expectedJson
             } )
